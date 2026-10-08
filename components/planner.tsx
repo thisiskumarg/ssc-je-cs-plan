@@ -1,0 +1,810 @@
+"use client";
+
+import { useMemo, useState, useSyncExternalStore } from "react";
+import {
+  BookOpen,
+  Brain,
+  Briefcase,
+  Coffee,
+  Globe2,
+  NotebookPen,
+  PenLine,
+  Timer,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  type DayPlan,
+  type Kind,
+  type Slot,
+  PLAN_END,
+  PLAN_START,
+  clampIso,
+  dayByIso,
+  dayNumber,
+  days,
+  formatDuration,
+  isoFromDate,
+  kindLabel,
+  requiredSlots,
+  rules,
+  slotsFor,
+  studyMinutes,
+  syllabus,
+  tally,
+  weeks,
+} from "@/lib/plan";
+
+const STORAGE_KEY = "sscje-cs-plan-v1";
+
+type Persisted = {
+  checks: Record<string, boolean>;
+  saturdayDuty: boolean;
+};
+
+const emptyProgress: Persisted = { checks: {}, saturdayDuty: false };
+let progress = emptyProgress;
+const progressListeners = new Set<() => void>();
+let progressLoaded = false;
+
+function ensureProgress() {
+  if (progressLoaded || typeof window === "undefined") return;
+  progressLoaded = true;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Partial<Persisted>;
+    progress = {
+      checks: parsed.checks ?? {},
+      saturdayDuty: Boolean(parsed.saturdayDuty),
+    };
+  } catch {
+    progress = emptyProgress;
+  }
+}
+
+function subscribeProgress(listener: () => void) {
+  ensureProgress();
+  progressListeners.add(listener);
+  return () => progressListeners.delete(listener);
+}
+
+function progressSnapshot() {
+  ensureProgress();
+  return progress;
+}
+
+function writeProgress(next: Persisted) {
+  progress = next;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  progressListeners.forEach((listener) => listener());
+}
+
+let clock: Date | null = null;
+const clockListeners = new Set<() => void>();
+
+function subscribeClock(listener: () => void) {
+  if (clock === null) clock = new Date();
+  clockListeners.add(listener);
+  const id = window.setInterval(() => {
+    clock = new Date();
+    clockListeners.forEach((item) => item());
+  }, 30000);
+  return () => {
+    clockListeners.delete(listener);
+    window.clearInterval(id);
+  };
+}
+
+function clockSnapshot() {
+  if (clock === null) clock = new Date();
+  return clock;
+}
+
+const shortDay: Record<string, string> = {
+  रविवार: "रवि",
+  सोमवार: "सोम",
+  मंगलवार: "मंगल",
+  बुधवार: "बुध",
+  गुरुवार: "गुरु",
+  शुक्रवार: "शुक्र",
+  शनिवार: "शनि",
+};
+
+const kindClass: Record<Kind, string> = {
+  theory: "border-l-[#1e3a5f]",
+  practice: "border-l-[#1f6b4a]",
+  reasoning: "border-l-[#3d4a86]",
+  ga: "border-l-[#8a5a12]",
+  mock: "border-l-[#9f1239]",
+  review: "border-l-[#57534e]",
+  job: "border-l-[#a8a29e]",
+  buffer: "border-l-transparent",
+};
+
+function KindIcon({ kind }: { kind: Kind }) {
+  const className = "size-3.5";
+  if (kind === "theory") return <BookOpen className={className} />;
+  if (kind === "practice") return <PenLine className={className} />;
+  if (kind === "reasoning") return <Brain className={className} />;
+  if (kind === "ga") return <Globe2 className={className} />;
+  if (kind === "mock") return <Timer className={className} />;
+  if (kind === "review") return <NotebookPen className={className} />;
+  if (kind === "job") return <Briefcase className={className} />;
+  return <Coffee className={className} />;
+}
+
+function toMinutes(value: string) {
+  const [h, m] = value.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function countsLabel(slot: Slot) {
+  const parts = [
+    slot.tech ? `${slot.tech} technical` : "",
+    slot.reasoning ? `${slot.reasoning} reasoning` : "",
+    slot.ga ? `${slot.ga} GA` : "",
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
+export function Planner() {
+  const saved = useSyncExternalStore(
+    subscribeProgress,
+    progressSnapshot,
+    () => emptyProgress,
+  );
+  const now = useSyncExternalStore(subscribeClock, clockSnapshot, () => null);
+  const checks = saved.checks;
+  const saturdayDuty = saved.saturdayDuty;
+  const [picked, setPicked] = useState<string | null>(null);
+  const [tab, setTab] = useState("today");
+
+  const actualIso = now ? isoFromDate(now) : null;
+  const inPlan =
+    actualIso !== null && actualIso >= PLAN_START && actualIso <= PLAN_END;
+  const todayIso = actualIso ? clampIso(actualIso) : PLAN_START;
+  const selected = picked ?? todayIso;
+  const ready = now !== null;
+
+  function setCheck(id: string, value: boolean) {
+    writeProgress({
+      ...progressSnapshot(),
+      checks: { ...progressSnapshot().checks, [id]: value },
+    });
+  }
+
+  function setSaturdayDuty(value: boolean) {
+    writeProgress({ ...progressSnapshot(), saturdayDuty: value });
+  }
+
+  const visibleDays = useMemo(
+    () =>
+      days.map((day) => ({
+        day,
+        slots: slotsFor(day, saturdayDuty),
+      })),
+    [saturdayDuty],
+  );
+
+  const planned = useMemo(() => {
+    const slots = visibleDays.flatMap((item) => item.slots);
+    return {
+      questions: tally(slots),
+      minutes: visibleDays.reduce((sum, item) => sum + studyMinutes(item.slots), 0),
+      required: visibleDays.flatMap((item) => requiredSlots(item.slots)),
+    };
+  }, [visibleDays]);
+
+  const doneQuestions = useMemo(() => {
+    const slots = visibleDays
+      .flatMap((item) => item.slots)
+      .filter((slot) => checks[slot.id]);
+    return tally(slots);
+  }, [checks, visibleDays]);
+
+  const requiredDone = planned.required.filter((slot) => checks[slot.id]).length;
+  const daysDone = visibleDays.filter((item) => {
+    const required = requiredSlots(item.slots);
+    return required.length > 0 && required.every((slot) => checks[slot.id]);
+  }).length;
+
+  const selectedDay = dayByIso(selected);
+  const selectedSlots = slotsFor(selectedDay, saturdayDuty);
+  const selectedRequired = requiredSlots(selectedSlots);
+  const selectedDone = selectedRequired.filter((slot) => checks[slot.id]).length;
+  const selectedIndex = days.findIndex((day) => day.iso === selected);
+
+  function openDay(iso: string) {
+    setPicked(iso);
+    setTab("today");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  const yesterday = selectedIndex > 0 ? days[selectedIndex - 1] : null;
+  const yesterdayOpen =
+    yesterday &&
+    ready &&
+    selected === todayIso &&
+    requiredSlots(slotsFor(yesterday, saturdayDuty)).some((slot) => !checks[slot.id]);
+
+  const questionTotal =
+    planned.questions.tech + planned.questions.reasoning + planned.questions.ga;
+  const questionDone =
+    doneQuestions.tech + doneQuestions.reasoning + doneQuestions.ga;
+  const slotPct = planned.required.length
+    ? Math.round((requiredDone / planned.required.length) * 100)
+    : 0;
+
+  return (
+    <div className="min-h-full">
+      <header className="border-b border-border/80">
+        <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-2xl">
+              <p className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+                SSC JE 2026 · Part-D · Computer Science & IT
+              </p>
+              <h1 className="font-heading mt-2 text-3xl leading-tight font-semibold sm:text-4xl">
+                8 से 31 अक्टूबर
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
+                24 din mein poora syllabus aur practice. Office{" "}
+                <span className="text-foreground">10:00–19:00</span> band hai.
+                Padhai roz subah 6:00 se aur raat 8:00 ke baad. Shani–Ravi ko
+                beech ka aaram plan ka hissa hai.
+              </p>
+            </div>
+            <div className="no-print flex items-center gap-3 rounded-xl bg-card px-3 py-2 ring-1 ring-foreground/10">
+              <Switch
+                checked={saturdayDuty}
+                onCheckedChange={setSaturdayDuty}
+                id="saturday-duty"
+              />
+              <label htmlFor="saturday-duty" className="max-w-40 text-sm leading-5">
+                Shanivar ko bhi duty hai
+              </label>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Stat
+              label="Din poore"
+              value={`${daysDone}/24`}
+              hint={inPlan ? "Aaj se 31 Oct tak" : "Plan ki dates 8–31 Oct hain"}
+            />
+            <Stat
+              label="Zaroori slots"
+              value={`${requiredDone}/${planned.required.length}`}
+              hint={`${slotPct}% check ho chuka`}
+            />
+            <Stat
+              label="MCQ plan"
+              value={`${questionDone}/${questionTotal}`}
+              hint={`${formatDuration(planned.minutes)} padhai, office alag`}
+            />
+          </div>
+          <Progress value={slotPct} className="no-print">
+            <ProgressLabel>Progress isi phone par save hota hai</ProgressLabel>
+            <ProgressValue />
+          </Progress>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+        <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
+          <TabsList className="no-print h-auto w-full flex-wrap justify-start gap-1 bg-card p-1 sm:w-fit">
+            <TabsTrigger className="h-8 flex-none px-3" value="today">
+              Aaj
+            </TabsTrigger>
+            <TabsTrigger className="h-8 flex-none px-3" value="week">
+              Hafta
+            </TabsTrigger>
+            <TabsTrigger className="h-8 flex-none px-3" value="all">
+              24 din
+            </TabsTrigger>
+            <TabsTrigger className="h-8 flex-none px-3" value="syllabus">
+              Syllabus
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="today" className="mt-5 flex flex-col gap-5">
+            <div className="no-print flex gap-2 overflow-x-auto pb-1">
+              {days.map((day) => {
+                const complete = requiredSlots(slotsFor(day, saturdayDuty)).every(
+                  (slot) => checks[slot.id],
+                );
+                const active = day.iso === selected;
+                return (
+                  <button
+                    key={day.iso}
+                    type="button"
+                    onClick={() => setPicked(day.iso)}
+                    className={`relative flex h-16 w-14 shrink-0 flex-col items-center justify-center rounded-lg border text-sm ${
+                      active
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card"
+                    }`}
+                  >
+                    <span className="text-base leading-none font-semibold">
+                      {day.dateLabel.split(" ")[0]}
+                    </span>
+                    <span className="mt-1 text-[10px] opacity-80">
+                      {shortDay[day.weekday]}
+                    </span>
+                    {complete ? (
+                      <span
+                        className={`absolute top-1 right-1 size-1.5 rounded-full ${
+                          active ? "bg-primary-foreground" : "bg-[#1f6b4a]"
+                        }`}
+                      />
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+
+            <DayHeader
+              day={selectedDay}
+              saturdayDuty={saturdayDuty}
+              done={selectedDone}
+              total={selectedRequired.length}
+              isToday={ready && selected === todayIso}
+              onPrev={() =>
+                selectedIndex > 0 && setPicked(days[selectedIndex - 1].iso)
+              }
+              onNext={() =>
+                selectedIndex < days.length - 1 &&
+                setPicked(days[selectedIndex + 1].iso)
+              }
+              disablePrev={selectedIndex <= 0}
+              disableNext={selectedIndex >= days.length - 1}
+            />
+
+            {yesterdayOpen ? (
+              <p className="rounded-lg bg-accent px-3 py-2 text-sm leading-6 text-accent-foreground">
+                Kal ka plan adhura hai. Aaj ki technical practice poori rakho.
+                Samay kam pade to pehle GA chhodo, phir reasoning.
+              </p>
+            ) : null}
+
+            {(saturdayDuty && selectedDay.dutyNote) || selectedDay.note ? (
+              <p className="rounded-lg bg-accent px-3 py-2 text-sm leading-6 text-accent-foreground">
+                {saturdayDuty && selectedDay.dutyNote
+                  ? selectedDay.dutyNote
+                  : selectedDay.note}
+              </p>
+            ) : null}
+
+            <ol className="flex flex-col gap-3">
+              {selectedSlots.map((slot) => (
+                <TimelineRow
+                  key={slot.id}
+                  slot={slot}
+                  checked={Boolean(checks[slot.id])}
+                  onCheckedChange={(value) => setCheck(slot.id, value)}
+                  live={
+                    ready &&
+                    selected === todayIso &&
+                    now !== null &&
+                    toMinutes(slot.start) <=
+                      now.getHours() * 60 + now.getMinutes() &&
+                    now.getHours() * 60 + now.getMinutes() < toMinutes(slot.end)
+                  }
+                />
+              ))}
+            </ol>
+
+            <div className="no-print flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => window.print()}>
+                Is din ko print karo
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (window.confirm("Is device ka progress mita dun?")) {
+                    writeProgress({ checks: {}, saturdayDuty });
+                  }
+                }}
+              >
+                Progress reset
+              </Button>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="week" className="mt-5 grid gap-4">
+            {weeks.map((week) => {
+              const weekDays = visibleDays.filter((item) => item.day.week === week.id);
+              const minutes = weekDays.reduce(
+                (sum, item) => sum + studyMinutes(item.slots),
+                0,
+              );
+              const questions = tally(weekDays.flatMap((item) => item.slots));
+              const required = weekDays.flatMap((item) => requiredSlots(item.slots));
+              const done = required.filter((slot) => checks[slot.id]).length;
+              return (
+                <Card key={week.id}>
+                  <CardContent className="flex flex-col gap-4">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <div>
+                        <p className="text-xs tracking-wide text-muted-foreground uppercase">
+                          Hafta {week.id} · {week.kicker}
+                        </p>
+                        <h2 className="font-heading text-2xl font-semibold">
+                          {week.title}
+                        </h2>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {formatDuration(minutes)} ·{" "}
+                        {questions.tech + questions.reasoning + questions.ga} MCQ ·{" "}
+                        {done}/{required.length} slots
+                      </p>
+                    </div>
+                    <p className="text-sm leading-6">{week.goal}</p>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {week.test}
+                    </p>
+                    <ul className="grid gap-2 sm:grid-cols-2">
+                      {weekDays.map(({ day, slots }) => {
+                        const req = requiredSlots(slots);
+                        const finished = req.filter((slot) => checks[slot.id]).length;
+                        return (
+                          <li key={day.iso}>
+                            <button
+                              type="button"
+                              onClick={() => openDay(day.iso)}
+                              className="flex w-full items-center justify-between gap-3 rounded-lg bg-muted/60 px-3 py-2 text-left"
+                            >
+                              <span>
+                                <span className="block text-sm font-medium">
+                                  {day.dateLabel} · {shortDay[day.weekday]}
+                                </span>
+                                <span className="block text-xs text-muted-foreground">
+                                  {day.title}
+                                </span>
+                              </span>
+                              <span className="text-xs text-muted-foreground tabular-nums">
+                                {finished}/{req.length}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </CardContent>
+                </Card>
+              );
+            })}
+            <Card>
+              <CardContent className="flex flex-col gap-2 text-sm leading-6">
+                <h2 className="font-heading text-xl font-semibold">Roz ka ghadi</h2>
+                <p>
+                  Office wale din: 6:00–7:20 theory, 7:35–8:50 practice, phir
+                  10:00–19:00 duty. Raat 8:00–8:25 GA, 8:25–9:40 technical,
+                  9:50–10:35 reasoning, 10:35–10:50 error log. Kul padhai{" "}
+                  {formatDuration(315)}.
+                </p>
+                <p>
+                  Shanivar chhutti: lagbhag 7–8 ghante, beech mein 12:00 se 2:30
+                  aaram. Raviwar: subah topic, dopehar ko timed test, shaam ko
+                  analysis. Duty wala shanivar office wale ghadi par simat jaata
+                  hai.
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="all" className="mt-5">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[40rem] border-separate border-spacing-y-2 text-left text-sm">
+                <thead className="text-xs tracking-wide text-muted-foreground uppercase">
+                  <tr>
+                    <th className="px-2 font-medium">Din</th>
+                    <th className="px-2 font-medium">Topic</th>
+                    <th className="px-2 font-medium">Padhai</th>
+                    <th className="px-2 font-medium">MCQ</th>
+                    <th className="px-2 font-medium">Ho gaya</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleDays.map(({ day, slots }) => {
+                    const req = requiredSlots(slots);
+                    const finished = req.filter((slot) => checks[slot.id]).length;
+                    const q = tally(slots);
+                    return (
+                      <tr key={day.iso} className="bg-card">
+                        <td className="rounded-l-lg px-2 py-3 align-top">
+                          <button
+                            type="button"
+                            className="text-left font-medium"
+                            onClick={() => openDay(day.iso)}
+                          >
+                            {day.dateLabel}
+                            <span className="block text-xs font-normal text-muted-foreground">
+                              {day.weekday}
+                            </span>
+                          </button>
+                        </td>
+                        <td className="px-2 py-3 align-top">
+                          {day.title}
+                          {day.numerical ? (
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              Numerical din
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-2 py-3 align-top tabular-nums">
+                          {formatDuration(studyMinutes(slots))}
+                        </td>
+                        <td className="px-2 py-3 align-top tabular-nums">
+                          {q.tech + q.reasoning + q.ga}
+                        </td>
+                        <td className="rounded-r-lg px-2 py-3 align-top tabular-nums">
+                          {finished}/{req.length}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="syllabus" className="mt-5 flex flex-col gap-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Card>
+                <CardContent className="flex flex-col gap-2 text-sm leading-6">
+                  <h2 className="font-heading text-xl font-semibold">Paper-I</h2>
+                  <p>2 ghante · 200 marks · har galat par −0.25</p>
+                  <p>Reasoning 50 · GA 50 · CS & IT 100</p>
+                  <p className="text-muted-foreground">
+                    Qualifying hai. Isi se Paper-II ki shortlist banti hai.
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="flex flex-col gap-2 text-sm leading-6">
+                  <h2 className="font-heading text-xl font-semibold">Paper-II</h2>
+                  <p>2 ghante · 100 sawal · 300 marks · har galat par −1</p>
+                  <p>Sirf Part-D, Computer Science & IT</p>
+                  <p className="text-muted-foreground">
+                    Final merit normalized Paper-II se banta hai. Andaza yahan
+                    mehnga padta hai.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+            <p className="text-sm leading-6 text-muted-foreground">
+              2026 ki notification mein yeh Part-D hai: Computer Science and
+              Information Technology. Scientific Assistant (IMD) ke CS stream ka
+              paper hai, aur wahi technical syllabus Paper-I aur Paper-II dono
+              mein hai. Sawal graduation level ke hain, sirf diploma notes se
+              kaatna mushkil hai.
+            </p>
+            <div className="grid gap-3">
+              {syllabus.map((subject) => {
+                const pct = coverage(subject.days, saturdayDuty, checks);
+                return (
+                  <Card key={subject.id}>
+                    <CardContent className="flex flex-col gap-3">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <h2 className="font-heading text-lg font-semibold">
+                          {subject.name}
+                        </h2>
+                        <span className="text-xs text-muted-foreground">
+                          {subject.weight} · {pct}%
+                        </span>
+                      </div>
+                      <ul className="grid gap-1 text-sm leading-6 sm:grid-cols-2">
+                        {subject.points.map((point) => (
+                          <li key={point}>{point}</li>
+                        ))}
+                      </ul>
+                      <p className="text-xs text-muted-foreground">
+                        {subject.days
+                          .map((iso) => dayByIso(iso).dateLabel)
+                          .join(", ")}
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+            <div className="grid gap-3">
+              {rules.map((rule) => (
+                <Card key={rule.title}>
+                  <CardContent className="flex flex-col gap-1">
+                    <h2 className="font-medium">{rule.title}</h2>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {rule.detail}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </main>
+    </div>
+  );
+}
+
+function coverage(
+  isos: string[],
+  saturdayDuty: boolean,
+  checks: Record<string, boolean>,
+) {
+  const required = isos.flatMap((iso) =>
+    requiredSlots(slotsFor(dayByIso(iso), saturdayDuty)),
+  );
+  if (required.length === 0) return 0;
+  const done = required.filter((slot) => checks[slot.id]).length;
+  return Math.round((done / required.length) * 100);
+}
+
+function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+}) {
+  return (
+    <Card size="sm">
+      <CardContent className="flex flex-col gap-1">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="font-heading text-2xl font-semibold tabular-nums">
+          {value}
+        </span>
+        <span className="text-xs text-muted-foreground">{hint}</span>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DayHeader({
+  day,
+  saturdayDuty,
+  done,
+  total,
+  isToday,
+  onPrev,
+  onNext,
+  disablePrev,
+  disableNext,
+}: {
+  day: DayPlan;
+  saturdayDuty: boolean;
+  done: number;
+  total: number;
+  isToday: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+  disablePrev: boolean;
+  disableNext: boolean;
+}) {
+  const slots = slotsFor(day, saturdayDuty);
+  const questions = tally(slots);
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <p className="text-xs tracking-wide text-muted-foreground uppercase">
+          Din {dayNumber(day.iso)} / 24 · Hafta {day.week}
+          {isToday ? " · aaj" : ""}
+        </p>
+        <h2 className="font-heading text-2xl font-semibold sm:text-3xl">
+          {day.weekday}, {day.dateLabel}
+        </h2>
+        <p className="mt-1 text-sm">{day.title}</p>
+        <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+          {day.outcome} Is din {formatDuration(studyMinutes(slots))} padhai,{" "}
+          {questions.tech} technical, {questions.reasoning} reasoning, {questions.ga}{" "}
+          GA.
+        </p>
+      </div>
+      <div className="no-print flex items-center gap-2">
+        <Badge variant="outline">
+          {done}/{total} slots
+        </Badge>
+        {day.numerical ? <Badge variant="secondary">Numerical</Badge> : null}
+        <Button variant="outline" size="sm" disabled={disablePrev} onClick={onPrev}>
+          Pichhla
+        </Button>
+        <Button variant="outline" size="sm" disabled={disableNext} onClick={onNext}>
+          Agla
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function TimelineRow({
+  slot,
+  checked,
+  onCheckedChange,
+  live,
+}: {
+  slot: Slot;
+  checked: boolean;
+  onCheckedChange: (value: boolean) => void;
+  live: boolean;
+}) {
+  const quiet = slot.kind === "buffer" || slot.kind === "job";
+  const label = countsLabel(slot);
+
+  if (quiet) {
+    return (
+      <li
+        className={`rounded-lg px-3 py-2 text-sm ${
+          slot.kind === "job" ? "bg-muted" : "text-muted-foreground"
+        } ${live ? "ring-2 ring-primary/50" : ""}`}
+      >
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="font-medium text-foreground">
+            <span className="mr-2 text-xs font-normal text-muted-foreground tabular-nums">
+              {slot.start}–{slot.end}
+            </span>
+            {slot.title}
+          </p>
+          {live ? (
+            <Badge variant="secondary" className="no-print">
+              Abhi
+            </Badge>
+          ) : null}
+        </div>
+        <p className="mt-1 leading-6">{slot.detail}</p>
+      </li>
+    );
+  }
+
+  return (
+    <li>
+      <Card
+        className={`border-l-4 py-0 ${kindClass[slot.kind]} ${
+          checked ? "opacity-70" : ""
+        } ${live ? "ring-2 ring-primary/40" : ""}`}
+      >
+        <CardContent className="py-3">
+          <div className="flex gap-3">
+            <Checkbox
+              checked={checked}
+              onCheckedChange={onCheckedChange}
+              aria-label={slot.title}
+              className="mt-1"
+            />
+            <div
+              className="min-w-0 flex-1 cursor-pointer"
+              onClick={() => onCheckedChange(!checked)}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {slot.start}–{slot.end}
+                </span>
+                <Badge variant="outline" className="gap-1">
+                  <KindIcon kind={slot.kind} />
+                  {kindLabel[slot.kind]}
+                </Badge>
+                {slot.optional ? <Badge variant="secondary">Optional</Badge> : null}
+                {live ? <Badge>Abhi</Badge> : null}
+              </div>
+              <p className="mt-1 font-medium">{slot.title}</p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                {slot.detail}
+              </p>
+              {label ? (
+                <p className="mt-2 text-xs font-medium">{label}</p>
+              ) : null}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </li>
+  );
+}
