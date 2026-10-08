@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   return new Response(Buffer.from(pdf), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": `inline; filename="${filename}"`,
       "Cache-Control": "public, max-age=3600",
     },
   });

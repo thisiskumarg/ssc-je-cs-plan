@@ -280,8 +280,8 @@ export function Planner() {
     ),
   );
   const pdfHref = saturdayDuty
-    ? "/api/schedule-pdf?duty=1"
-    : "/api/schedule-pdf";
+    ? "/ssc-je-cs-8-31-oct-saturday-duty.pdf"
+    : "/ssc-je-cs-8-31-oct.pdf";
   const todaySlots = slotsFor(dayByIso(todayIso), saturdayDuty);
   const nowMins = now ? now.getHours() * 60 + now.getMinutes() : null;
   const liveSlot =

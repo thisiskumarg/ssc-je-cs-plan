@@ -15,8 +15,8 @@ Open [http://127.0.0.1:43123](http://127.0.0.1:43123).
 
 The phone timetable is a PDF from **PDF download** on the page, or directly:
 
-- [Saturday off](http://127.0.0.1:43123/api/schedule-pdf)
-- [Saturday on duty](http://127.0.0.1:43123/api/schedule-pdf?duty=1)
+- [Saturday off](http://127.0.0.1:43123/ssc-je-cs-8-31-oct.pdf)
+- [Saturday on duty](http://127.0.0.1:43123/ssc-je-cs-8-31-oct-saturday-duty.pdf)
 
 Each day is a page with the clock time, duration, and what to study. The tracker locks a slot until its start time, and marks a required slot Missed once that time has passed.
 
