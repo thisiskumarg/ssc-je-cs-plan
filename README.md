@@ -13,6 +13,13 @@ npm run dev -- --hostname 0.0.0.0 --port 43123
 
 Open [http://127.0.0.1:43123](http://127.0.0.1:43123).
 
+The phone timetable is a PDF from **PDF download** on the page, or directly:
+
+- [Saturday off](http://127.0.0.1:43123/api/schedule-pdf)
+- [Saturday on duty](http://127.0.0.1:43123/api/schedule-pdf?duty=1)
+
+Each day is a page with the clock time, duration, and what to study. The tracker locks a slot until its start time, and marks a required slot Missed once that time has passed.
+
 Checked slots stay in this browser (`localStorage`). If Saturday is also a workday, turn on **Shanivar ko bhi duty hai** — those four dates switch to the morning-and-night timetable.
 
 ## How the days are split

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   BookOpen,
   Brain,
@@ -11,8 +11,9 @@ import {
   PenLine,
   Timer,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress";
@@ -144,6 +145,36 @@ function toMinutes(value: string) {
   return h * 60 + m;
 }
 
+function slotMinutes(slot: Slot) {
+  return toMinutes(slot.end) - toMinutes(slot.start);
+}
+
+type LockReason = "future-day" | "not-yet";
+
+function lockFor(dayIso: string, slot: Slot, now: Date | null): LockReason | null {
+  if (!now) return null;
+  const today = isoFromDate(now);
+  if (dayIso > today) return "future-day";
+  if (dayIso < today) return null;
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  if (toMinutes(slot.start) > nowMins) return "not-yet";
+  return null;
+}
+
+function isMissed(
+  dayIso: string,
+  slot: Slot,
+  now: Date | null,
+  checked: boolean,
+) {
+  if (!now || checked || slot.optional) return false;
+  if (slot.kind === "job" || slot.kind === "buffer") return false;
+  const today = isoFromDate(now);
+  if (dayIso > today) return false;
+  if (dayIso < today) return true;
+  return now.getHours() * 60 + now.getMinutes() >= toMinutes(slot.end);
+}
+
 function countsLabel(slot: Slot) {
   const parts = [
     slot.tech ? `${slot.tech} technical` : "",
@@ -164,6 +195,8 @@ export function Planner() {
   const saturdayDuty = saved.saturdayDuty;
   const [picked, setPicked] = useState<string | null>(null);
   const [tab, setTab] = useState("today");
+  const [lockNote, setLockNote] = useState<string | null>(null);
+  const scrolled = useRef(false);
 
   const actualIso = now ? isoFromDate(now) : null;
   const inPlan =
@@ -241,8 +274,67 @@ export function Planner() {
     ? Math.round((requiredDone / planned.required.length) * 100)
     : 0;
 
+  const missed = visibleDays.flatMap(({ day, slots }) =>
+    requiredSlots(slots).filter((slot) =>
+      isMissed(day.iso, slot, now, Boolean(checks[slot.id])),
+    ),
+  );
+  const pdfHref = saturdayDuty
+    ? "/api/schedule-pdf?duty=1"
+    : "/api/schedule-pdf";
+  const todaySlots = slotsFor(dayByIso(todayIso), saturdayDuty);
+  const nowMins = now ? now.getHours() * 60 + now.getMinutes() : null;
+  const liveSlot =
+    nowMins === null
+      ? null
+      : (todaySlots.find(
+          (slot) =>
+            toMinutes(slot.start) <= nowMins && nowMins < toMinutes(slot.end),
+        ) ?? null);
+  const nextStudy =
+    nowMins === null
+      ? null
+      : (todaySlots.find(
+          (slot) =>
+            slot.kind !== "job" &&
+            slot.kind !== "buffer" &&
+            toMinutes(slot.start) > nowMins,
+        ) ?? null);
+  const focus =
+    liveSlot && liveSlot.kind !== "job" && liveSlot.kind !== "buffer"
+      ? liveSlot
+      : nextStudy;
+
+  useEffect(() => {
+    if (!ready || scrolled.current) return;
+    scrolled.current = true;
+    document.querySelector("[data-live='true']")?.scrollIntoView({
+      block: "center",
+    });
+  }, [ready]);
+
+  function deny(message: string) {
+    setLockNote(message);
+    window.setTimeout(() => {
+      setLockNote((current) => (current === message ? null : current));
+    }, 2800);
+  }
+
+  function tryCheck(dayIso: string, slot: Slot, value: boolean) {
+    const reason = lockFor(dayIso, slot, now);
+    if (reason === "future-day") {
+      deny("Aage ka din lock hai. Uska time aane do.");
+      return;
+    }
+    if (reason === "not-yet") {
+      deny(`${slot.start} se pehle yeh slot lock hai.`);
+      return;
+    }
+    setCheck(slot.id, value);
+  }
+
   return (
-    <div className="min-h-full">
+    <div className="min-h-full pb-44">
       <header className="border-b border-border/80">
         <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -260,19 +352,27 @@ export function Planner() {
                 beech ka aaram plan ka hissa hai.
               </p>
             </div>
-            <div className="no-print flex items-center gap-3 rounded-xl bg-card px-3 py-2 ring-1 ring-foreground/10">
-              <Switch
-                checked={saturdayDuty}
-                onCheckedChange={setSaturdayDuty}
-                id="saturday-duty"
-              />
-              <label htmlFor="saturday-duty" className="max-w-40 text-sm leading-5">
-                Shanivar ko bhi duty hai
-              </label>
+            <div className="flex w-full flex-col gap-2 sm:w-auto">
+              <a
+                className={cn(buttonVariants({ size: "lg" }), "h-10 justify-center px-4")}
+                href={pdfHref}
+              >
+                PDF download
+              </a>
+              <div className="no-print flex items-center gap-3 rounded-xl bg-card px-3 py-2 ring-1 ring-foreground/10">
+                <Switch
+                  checked={saturdayDuty}
+                  onCheckedChange={setSaturdayDuty}
+                  id="saturday-duty"
+                />
+                <label htmlFor="saturday-duty" className="text-sm leading-5">
+                  Shanivar ko bhi duty hai
+                </label>
+              </div>
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Stat
               label="Din poore"
               value={`${daysDone}/24`}
@@ -287,6 +387,11 @@ export function Planner() {
               label="MCQ plan"
               value={`${questionDone}/${questionTotal}`}
               hint={`${formatDuration(planned.minutes)} padhai, office alag`}
+            />
+            <Stat
+              label="Missed"
+              value={String(missed.length)}
+              hint={missed.length ? "Time nikal gaya, tick baaki" : "Koi slot nahi chhuta"}
             />
           </div>
           <Progress value={slotPct} className="no-print">
@@ -314,11 +419,16 @@ export function Planner() {
           </TabsList>
 
           <TabsContent value="today" className="mt-5 flex flex-col gap-5">
-            <div className="no-print flex gap-2 overflow-x-auto pb-1">
+            <div className="no-print sticky top-0 z-20 -mx-4 flex gap-2 overflow-x-auto bg-background/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6">
               {days.map((day) => {
-                const complete = requiredSlots(slotsFor(day, saturdayDuty)).every(
-                  (slot) => checks[slot.id],
+                const daySlots = slotsFor(day, saturdayDuty);
+                const required = requiredSlots(daySlots);
+                const complete =
+                  required.length > 0 && required.every((slot) => checks[slot.id]);
+                const dayMissed = required.some((slot) =>
+                  isMissed(day.iso, slot, now, Boolean(checks[slot.id])),
                 );
+                const future = ready && day.iso > todayIso;
                 const active = day.iso === selected;
                 return (
                   <button
@@ -329,7 +439,7 @@ export function Planner() {
                       active
                         ? "border-primary bg-primary text-primary-foreground"
                         : "border-border bg-card"
-                    }`}
+                    } ${future ? "opacity-60" : ""}`}
                   >
                     <span className="text-base leading-none font-semibold">
                       {day.dateLabel.split(" ")[0]}
@@ -343,6 +453,9 @@ export function Planner() {
                           active ? "bg-primary-foreground" : "bg-[#1f6b4a]"
                         }`}
                       />
+                    ) : null}
+                    {dayMissed ? (
+                      <span className="absolute top-1 left-1 size-1.5 rounded-full bg-[#9f1239]" />
                     ) : null}
                   </button>
                 );
@@ -366,6 +479,18 @@ export function Planner() {
               disableNext={selectedIndex >= days.length - 1}
             />
 
+            {ready && selected > todayIso ? (
+              <p className="rounded-lg bg-muted px-3 py-2 text-sm leading-6">
+                Yeh din lock hai. Slot ka checkbox uske start time par khulega.
+              </p>
+            ) : null}
+
+            {lockNote ? (
+              <p className="rounded-lg bg-accent px-3 py-2 text-sm leading-6 text-accent-foreground">
+                {lockNote}
+              </p>
+            ) : null}
+
             {yesterdayOpen ? (
               <p className="rounded-lg bg-accent px-3 py-2 text-sm leading-6 text-accent-foreground">
                 Kal ka plan adhura hai. Aaj ki technical practice poori rakho.
@@ -387,20 +512,25 @@ export function Planner() {
                   key={slot.id}
                   slot={slot}
                   checked={Boolean(checks[slot.id])}
-                  onCheckedChange={(value) => setCheck(slot.id, value)}
-                  live={
-                    ready &&
-                    selected === todayIso &&
-                    now !== null &&
-                    toMinutes(slot.start) <=
-                      now.getHours() * 60 + now.getMinutes() &&
-                    now.getHours() * 60 + now.getMinutes() < toMinutes(slot.end)
+                  locked={lockFor(selectedDay.iso, slot, now)}
+                  missed={isMissed(
+                    selectedDay.iso,
+                    slot,
+                    now,
+                    Boolean(checks[slot.id]),
+                  )}
+                  onCheckedChange={(value) =>
+                    tryCheck(selectedDay.iso, slot, value)
                   }
+                  live={liveSlot?.id === slot.id && selected === todayIso}
                 />
               ))}
             </ol>
 
             <div className="no-print flex flex-wrap gap-2">
+              <a className={buttonVariants({ variant: "outline" })} href={pdfHref}>
+                Is plan ki PDF
+              </a>
               <Button variant="outline" onClick={() => window.print()}>
                 Is din ko print karo
               </Button>
@@ -630,6 +760,25 @@ export function Planner() {
           </TabsContent>
         </Tabs>
       </main>
+      <StrictDock
+        liveSlot={liveSlot}
+        focus={focus}
+        focusChecked={focus ? Boolean(checks[focus.id]) : false}
+        focusLocked={focus ? lockFor(todayIso, focus, now) : null}
+        missed={missed.length}
+        pdfHref={pdfHref}
+        onDone={() => {
+          if (focus) tryCheck(todayIso, focus, true);
+        }}
+        onMissed={() => {
+          const first = visibleDays.find(({ day, slots }) =>
+            requiredSlots(slots).some((slot) =>
+              isMissed(day.iso, slot, now, Boolean(checks[slot.id])),
+            ),
+          );
+          if (first) openDay(first.day.iso);
+        }}
+      />
     </div>
   );
 }
@@ -728,36 +877,39 @@ function DayHeader({
 function TimelineRow({
   slot,
   checked,
+  locked,
+  missed,
   onCheckedChange,
   live,
 }: {
   slot: Slot;
   checked: boolean;
+  locked: LockReason | null;
+  missed: boolean;
   onCheckedChange: (value: boolean) => void;
   live: boolean;
 }) {
   const quiet = slot.kind === "buffer" || slot.kind === "job";
   const label = countsLabel(slot);
+  const duration = formatDuration(slotMinutes(slot));
 
   if (quiet) {
     return (
       <li
-        className={`rounded-lg px-3 py-2 text-sm ${
+        data-live={live ? "true" : undefined}
+        className={`rounded-lg px-3 py-3 text-sm ${
           slot.kind === "job" ? "bg-muted" : "text-muted-foreground"
         } ${live ? "ring-2 ring-primary/50" : ""}`}
       >
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <p className="font-medium text-foreground">
-            <span className="mr-2 text-xs font-normal text-muted-foreground tabular-nums">
+            <span className="mr-2 font-normal text-muted-foreground tabular-nums">
               {slot.start}–{slot.end}
             </span>
+            <span className="mr-2 text-xs text-muted-foreground">{duration}</span>
             {slot.title}
           </p>
-          {live ? (
-            <Badge variant="secondary" className="no-print">
-              Abhi
-            </Badge>
-          ) : null}
+          {live ? <Badge>Abhi</Badge> : null}
         </div>
         <p className="mt-1 leading-6">{slot.detail}</p>
       </li>
@@ -765,9 +917,9 @@ function TimelineRow({
   }
 
   return (
-    <li>
+    <li data-live={live ? "true" : undefined}>
       <Card
-        className={`border-l-4 py-0 ${kindClass[slot.kind]} ${
+        className={`border-l-4 py-0 ${missed ? "border-l-[#9f1239]" : kindClass[slot.kind]} ${
           checked ? "opacity-70" : ""
         } ${live ? "ring-2 ring-primary/40" : ""}`}
       >
@@ -775,26 +927,29 @@ function TimelineRow({
           <div className="flex gap-3">
             <Checkbox
               checked={checked}
-              onCheckedChange={onCheckedChange}
+              onCheckedChange={(value) => onCheckedChange(value)}
               aria-label={slot.title}
-              className="mt-1"
+              className="mt-1 size-6"
             />
             <div
               className="min-w-0 flex-1 cursor-pointer"
               onClick={() => onCheckedChange(!checked)}
             >
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-muted-foreground tabular-nums">
+                <span className="text-sm text-muted-foreground tabular-nums">
                   {slot.start}–{slot.end}
                 </span>
+                <span className="text-xs font-medium text-foreground">{duration}</span>
                 <Badge variant="outline" className="gap-1">
                   <KindIcon kind={slot.kind} />
                   {kindLabel[slot.kind]}
                 </Badge>
                 {slot.optional ? <Badge variant="secondary">Optional</Badge> : null}
+                {locked ? <Badge variant="secondary">Lock</Badge> : null}
+                {missed ? <Badge variant="destructive">Missed</Badge> : null}
                 {live ? <Badge>Abhi</Badge> : null}
               </div>
-              <p className="mt-1 font-medium">{slot.title}</p>
+              <p className="mt-1 text-base font-medium">{slot.title}</p>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
                 {slot.detail}
               </p>
@@ -806,5 +961,67 @@ function TimelineRow({
         </CardContent>
       </Card>
     </li>
+  );
+}
+
+function StrictDock({
+  liveSlot,
+  focus,
+  focusChecked,
+  focusLocked,
+  missed,
+  pdfHref,
+  onDone,
+  onMissed,
+}: {
+  liveSlot: Slot | null;
+  focus: Slot | null;
+  focusChecked: boolean;
+  focusLocked: LockReason | null;
+  missed: number;
+  pdfHref: string;
+  onDone: () => void;
+  onMissed: () => void;
+}) {
+  const office = liveSlot?.kind === "job";
+  const label = office
+    ? "Office chal raha hai. Padhai band."
+    : focus
+      ? focusChecked
+        ? "Yeh slot ho chuka."
+        : focusLocked
+          ? `Agli padhai ${focus.start} par khulegi.`
+          : "Abhi yeh slot."
+      : "Aaj ke study slots khatam.";
+  const title = focus?.title ?? liveSlot?.title ?? "Aaj ka plan";
+  const time = focus
+    ? `${focus.start}–${focus.end} · ${formatDuration(slotMinutes(focus))}`
+    : liveSlot
+      ? `${liveSlot.start}–${liveSlot.end}`
+      : "";
+
+  return (
+    <div className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
+      <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <button type="button" className="font-medium text-[#9f1239]" onClick={onMissed}>
+            Missed {missed}
+          </button>
+          <a className="font-medium underline" href={pdfHref}>
+            PDF
+          </a>
+        </div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="truncate text-sm font-medium">{title}</p>
+        <p className="text-xs tabular-nums text-muted-foreground">{time}</p>
+        <Button
+          className="h-11"
+          disabled={!focus || focusChecked || Boolean(focusLocked)}
+          onClick={onDone}
+        >
+          {focusChecked ? "Ho chuka" : focusLocked ? `${focus?.start} tak lock` : "Yeh slot ho gaya"}
+        </Button>
+      </div>
+    </div>
   );
 }
