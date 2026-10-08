@@ -42,6 +42,7 @@ import {
 } from "@/lib/plan";
 
 const STORAGE_KEY = "sscje-cs-plan-v1";
+const publicBase = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 type Persisted = {
   checks: Record<string, boolean>;
@@ -279,9 +280,11 @@ export function Planner() {
       isMissed(day.iso, slot, now, Boolean(checks[slot.id])),
     ),
   );
-  const pdfHref = saturdayDuty
-    ? "/ssc-je-cs-8-31-oct-saturday-duty.pdf"
-    : "/ssc-je-cs-8-31-oct.pdf";
+  const pdfHref = `${publicBase}${
+    saturdayDuty
+      ? "/ssc-je-cs-8-31-oct-saturday-duty.pdf"
+      : "/ssc-je-cs-8-31-oct.pdf"
+  }`;
   const todaySlots = slotsFor(dayByIso(todayIso), saturdayDuty);
   const nowMins = now ? now.getHours() * 60 + now.getMinutes() : null;
   const liveSlot =

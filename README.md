@@ -13,6 +13,8 @@ npm run dev -- --hostname 0.0.0.0 --port 43123
 
 Open [http://127.0.0.1:43123](http://127.0.0.1:43123).
 
+The same planner is published with GitHub Pages from `main`: [https://thisiskumarg.github.io/ssc-je-cs-plan/](https://thisiskumarg.github.io/ssc-je-cs-plan/). Checked slots still stay in the browser that opened the page.
+
 The phone timetable is a PDF from **PDF download** on the page, or directly:
 
 - [Saturday off](http://127.0.0.1:43123/ssc-je-cs-8-31-oct.pdf)
