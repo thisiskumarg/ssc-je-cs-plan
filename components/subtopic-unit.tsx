@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LectureStage } from "@/components/lecture-stage";
+import { enterLectureFullscreen, LectureStage } from "@/components/lecture-stage";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { subtopicPack } from "@/lib/subtopic-learn";
@@ -44,7 +44,7 @@ export function SubtopicUnit({
       </div>
 
       <div className="flex flex-col gap-2">
-        <h4 className="text-sm font-medium">Suno, bade player mein</h4>
+        <h4 className="text-sm font-medium">Suno, poori screen par</h4>
         {pack.listen.map((video) => (
           <div key={video.yt} className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -55,7 +55,10 @@ export function SubtopicUnit({
                 type="button"
                 size="sm"
                 variant={playing === video.yt ? "secondary" : "default"}
-                onClick={() => setPlaying(video.yt)}
+                onClick={() => {
+                  enterLectureFullscreen();
+                  setPlaying(video.yt);
+                }}
               >
                 {playing === video.yt ? "Player khula hai" : "Yahin chalao"}
               </Button>

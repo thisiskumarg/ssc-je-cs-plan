@@ -15,11 +15,11 @@ Open [http://127.0.0.1:43123](http://127.0.0.1:43123).
 
 The same planner is published with GitHub Pages from `main`: [https://thisiskumarg.github.io/ssc-je-cs-plan/](https://thisiskumarg.github.io/ssc-je-cs-plan/). Source: [github.com/thisiskumarg/ssc-je-cs-plan](https://github.com/thisiskumarg/ssc-je-cs-plan).
 
-The Syllabus tab lists every official Paper-I line (14.2.1 reasoning, 14.2.2 general awareness) and every Paper-II Part-D line (14.3.4). Each line is pinned to a day from 8 to 31 October and to a clock window inside that day's existing slot. Open the line for the lecture in the large on-page player, the page, and the PYQ count for that same window. Tick it when that window is done.
+The Syllabus tab lists every official Paper-I line (14.2.1 reasoning, 14.2.2 general awareness) and every Paper-II Part-D line (14.3.4). Each line is pinned to a day from 8 to 31 October and to a clock window inside that day's existing slot. Open the line for the lecture in the full-screen player, the page, and the PYQ count for that same window. Tick it when that window is done.
 
 The Formula tab is the one-line card for that same syllabus: Digital Logic through Computer Networks, Engineering Mathematics, and a short reasoning-pattern card. Each day opens only its own lines. A tick means you can say the line with the sheet closed.
 
-The Sheets tab is the reading itself. Every study slot from 8 to 31 October has a sheet that opens at that clock time: the lesson, the worked numerical, the reasoning drill, and the revision prompt. Each sheet opens its lecture in a large player on this page, with play, seek, volume, speed, and subtitles, lists the pages to open, and gives the PYQ set for that slot's clock time. A point tick means that block is done. A video tick means that lecture was watched. Future days are in the same tab. Checked slots, syllabus ticks, formula ticks, sheet ticks, video ticks, point ticks, sheet PYQ ticks, and subtopic PYQ ticks stay in the browser that opened the page.
+The Sheets tab is the reading itself. Every study slot from 8 to 31 October has a sheet that opens at that clock time: the lesson, the worked numerical, the reasoning drill, and the revision prompt. Each sheet opens its lecture full screen on this page, with YouTube-style play, seek, volume, speed, and subtitle controls, lists the pages to open, and gives the PYQ set for that slot's clock time. A point tick means that block is done. A video tick means that lecture was watched. Future days are in the same tab. Checked slots, syllabus ticks, formula ticks, sheet ticks, video ticks, point ticks, sheet PYQ ticks, and subtopic PYQ ticks stay in the browser that opened the page.
 
 The phone timetable is a PDF from **PDF download** on the page, or directly:
 

@@ -975,7 +975,7 @@ function DaySyllabus({
         </div>
         <p className="text-sm leading-6 text-muted-foreground">
           Har line ka window isi din ke diye hue slot ke andar hai. Us ghadi par
-          video bade player mein kholo, page kholo, aur utne PYQ isi window mein karo.
+          video poori screen par kholo, page kholo, aur utne PYQ isi window mein karo.
         </p>
         <div className="flex flex-col gap-3">
           {items.map((item) => (
