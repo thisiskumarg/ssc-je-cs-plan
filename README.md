@@ -17,7 +17,9 @@ The same planner is published with GitHub Pages from `main`: [https://thisiskuma
 
 The Syllabus tab lists every official Paper-I line (14.2.1 reasoning, 14.2.2 general awareness) and every Paper-II Part-D line (14.3.4). Each line is pinned to a day from 8 to 31 October. Tick it when that study is done.
 
-The Formula tab is the sheet for that same syllabus: Digital Logic through Computer Networks, Engineering Mathematics, and a short reasoning-pattern card. Each day opens only its own lines. A tick means you can say the line with the sheet closed. Checked slots, syllabus ticks, and formula ticks stay in the browser that opened the page.
+The Formula tab is the one-line card for that same syllabus: Digital Logic through Computer Networks, Engineering Mathematics, and a short reasoning-pattern card. Each day opens only its own lines. A tick means you can say the line with the sheet closed.
+
+The Sheets tab is the reading itself. Every study slot from 8 to 31 October has a sheet that opens at that clock time: the lesson, the worked numerical, the reasoning drill, and the revision prompt. Future days are in the same tab. A tick means that sheet was revised. Checked slots, syllabus ticks, formula ticks, and sheet ticks stay in the browser that opened the page.
 
 The phone timetable is a PDF from **PDF download** on the page, or directly:
 

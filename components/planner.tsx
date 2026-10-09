@@ -44,6 +44,8 @@ import { officialTopics, paperLabel, topicsOnDay } from "@/lib/official-syllabus
 import { allFormulas } from "@/lib/formulas";
 import { SyllabusBoard } from "@/components/syllabus-board";
 import { DayFormulas, FormulaBoard } from "@/components/formula-board";
+import { DaySheets, SheetLibrary, slotSheets } from "@/components/study-library";
+import { studySheets, type StudySheet } from "@/lib/study-sheets";
 
 const STORAGE_KEY = "sscje-cs-plan-v1";
 const publicBase = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -53,6 +55,7 @@ type Persisted = {
   saturdayDuty: boolean;
   topics: Record<string, boolean>;
   formulas: Record<string, boolean>;
+  sheets: Record<string, boolean>;
 };
 
 const emptyProgress: Persisted = {
@@ -60,6 +63,7 @@ const emptyProgress: Persisted = {
   saturdayDuty: false,
   topics: {},
   formulas: {},
+  sheets: {},
 };
 let progress = emptyProgress;
 const progressListeners = new Set<() => void>();
@@ -77,6 +81,7 @@ function ensureProgress() {
       saturdayDuty: Boolean(parsed.saturdayDuty),
       topics: parsed.topics ?? {},
       formulas: parsed.formulas ?? {},
+      sheets: parsed.sheets ?? {},
     };
   } catch {
     progress = emptyProgress;
@@ -211,9 +216,11 @@ export function Planner() {
   const saturdayDuty = saved.saturdayDuty;
   const topicsDone = saved.topics;
   const formulasDone = saved.formulas;
+  const sheetsRead = saved.sheets;
   const syllabusDone = officialTopics.filter((item) => topicsDone[item.id]).length;
   const formulaList = allFormulas();
   const formulaDone = formulaList.filter((item) => formulasDone[item.id]).length;
+  const sheetDone = studySheets.filter((item) => sheetsRead[item.id]).length;
   const [picked, setPicked] = useState<string | null>(null);
   const [tab, setTab] = useState("today");
   const [lockNote, setLockNote] = useState<string | null>(null);
@@ -250,6 +257,14 @@ export function Planner() {
     writeProgress({
       ...current,
       formulas: { ...current.formulas, [id]: value },
+    });
+  }
+
+  function setSheet(id: string, value: boolean) {
+    const current = progressSnapshot();
+    writeProgress({
+      ...current,
+      sheets: { ...current.sheets, [id]: value },
     });
   }
 
@@ -435,7 +450,7 @@ export function Planner() {
           </div>
           <Progress value={slotPct} className="no-print">
             <ProgressLabel>
-              Slots {slotPct}% · syllabus {syllabusDone}/{officialTopics.length} · formula {formulaDone}/{formulaList.length}
+              Slots {slotPct}% · sheets {sheetDone}/{studySheets.length} · syllabus {syllabusDone}/{officialTopics.length} · formula {formulaDone}/{formulaList.length}
             </ProgressLabel>
             <ProgressValue />
           </Progress>
@@ -459,6 +474,9 @@ export function Planner() {
             </TabsTrigger>
             <TabsTrigger className="h-8 flex-none px-3" value="formula">
               Formula
+            </TabsTrigger>
+            <TabsTrigger className="h-8 flex-none px-3" value="sheets">
+              Sheets
             </TabsTrigger>
           </TabsList>
 
@@ -563,11 +581,24 @@ export function Planner() {
               onOpenSheet={() => setTab("formula")}
             />
 
+            <DaySheets
+              iso={selectedDay.iso}
+              saturdayDuty={saturdayDuty}
+              read={sheetsRead}
+              onToggle={setSheet}
+              highlightId={
+                selected === todayIso && focus
+                  ? slotSheets(selectedDay.iso, focus.start, saturdayDuty)[0]?.id
+                  : null
+              }
+            />
+
             <ol className="flex flex-col gap-3">
               {selectedSlots.map((slot) => (
                 <TimelineRow
                   key={slot.id}
                   slot={slot}
+                  sheets={slotSheets(selectedDay.iso, slot.start, saturdayDuty)}
                   checked={Boolean(checks[slot.id])}
                   locked={lockFor(selectedDay.iso, slot, now)}
                   missed={isMissed(
@@ -579,6 +610,12 @@ export function Planner() {
                   onCheckedChange={(value) =>
                     tryCheck(selectedDay.iso, slot, value)
                   }
+                  onOpenSheet={(id) => {
+                    document.getElementById(`sheet-${id}`)?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
+                  }}
                   live={liveSlot?.id === slot.id && selected === todayIso}
                 />
               ))}
@@ -595,7 +632,13 @@ export function Planner() {
                 variant="ghost"
                 onClick={() => {
                   if (window.confirm("Is device ka progress mita dun?")) {
-                    writeProgress({ checks: {}, saturdayDuty, topics: {}, formulas: {} });
+                    writeProgress({
+                      checks: {},
+                      saturdayDuty,
+                      topics: {},
+                      formulas: {},
+                      sheets: {},
+                    });
                   }
                 }}
               >
@@ -789,6 +832,16 @@ export function Planner() {
           <TabsContent value="formula" className="mt-5">
             <FormulaBoard done={formulasDone} onToggle={setFormula} />
           </TabsContent>
+
+          <TabsContent value="sheets" className="mt-5">
+            <SheetLibrary
+              saturdayDuty={saturdayDuty}
+              todayIso={todayIso}
+              read={sheetsRead}
+              onToggle={setSheet}
+              onOpenDay={openDay}
+            />
+          </TabsContent>
         </Tabs>
       </main>
       <StrictDock
@@ -938,17 +991,21 @@ function DayHeader({
 
 function TimelineRow({
   slot,
+  sheets,
   checked,
   locked,
   missed,
   onCheckedChange,
+  onOpenSheet,
   live,
 }: {
   slot: Slot;
+  sheets: StudySheet[];
   checked: boolean;
   locked: LockReason | null;
   missed: boolean;
   onCheckedChange: (value: boolean) => void;
+  onOpenSheet: (id: string) => void;
   live: boolean;
 }) {
   const quiet = slot.kind === "buffer" || slot.kind === "job";
@@ -974,6 +1031,7 @@ function TimelineRow({
           {live ? <Badge>Abhi</Badge> : null}
         </div>
         <p className="mt-1 leading-6">{slot.detail}</p>
+        <SheetLinks sheets={sheets} onOpenSheet={onOpenSheet} />
       </li>
     );
   }
@@ -1018,11 +1076,39 @@ function TimelineRow({
               {label ? (
                 <p className="mt-2 text-xs font-medium">{label}</p>
               ) : null}
+              <SheetLinks sheets={sheets} onOpenSheet={onOpenSheet} />
             </div>
           </div>
         </CardContent>
       </Card>
     </li>
+  );
+}
+
+function SheetLinks({
+  sheets,
+  onOpenSheet,
+}: {
+  sheets: StudySheet[];
+  onOpenSheet: (id: string) => void;
+}) {
+  if (sheets.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      {sheets.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className="w-fit text-left text-sm font-medium underline"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenSheet(item.id);
+          }}
+        >
+          Sheet kholo: {item.title}
+        </button>
+      ))}
+    </div>
   );
 }
 
