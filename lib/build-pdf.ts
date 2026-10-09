@@ -8,6 +8,7 @@ import {
   tally,
 } from "@/lib/plan";
 import { paperLabel, topicsOnDay } from "@/lib/official-syllabus";
+import { formulaSheets, sheetsForDay } from "@/lib/formulas";
 
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
@@ -95,6 +96,7 @@ export async function buildSchedulePdf(saturdayDuty: boolean) {
   for (const day of days) {
     drawDay(doc, font, bold, day.iso, saturdayDuty);
   }
+  drawFormulaAppendix(doc, font, bold);
 
   return doc.save();
 }
@@ -136,7 +138,12 @@ function drawCover(
     ["07:20-07:35", "15 min", "Break. Agle sawal khol ke rakho"],
     ["07:35-08:50", "1h 15m", "Technical practice, about 25 MCQ"],
     ["08:50-10:00", "1h 10m", "Nikalna. 9:15 tak ghar se bahar"],
-    ["10:00-19:00", "9h", "Office. Is dauran padhai nahi"],
+    ["10:00-13:00", "3h", "Office kaam. Naya chapter nahi"],
+    ["13:00-13:20", "20 min", "Zaroori: aaj ki formula sheet + 6 MCQ"],
+    ["13:20-16:30", "3h 10m", "Office kaam"],
+    ["16:30-16:42", "12 min", "Zaroori: sheet band, formulas yaad"],
+    ["16:42-18:50", "2h 8m", "Office kaam"],
+    ["18:50-19:00", "10 min", "Zaroori: 5 formulas pocket card"],
     ["19:00-20:00", "1h", "Ghar, khana, kapde"],
     ["20:00-20:25", "25 min", "General Awareness"],
     ["20:25-21:40", "1h 15m", "Doosra technical hissa + MCQ"],
@@ -175,6 +182,8 @@ function drawCover(
     "Tracker future slot lock karta hai. Time shuru hone se pehle tick nahi hota.",
     "Jo slot nikal gaya aur tick nahi, woh Missed rehta hai jab tak complete na karo.",
     "Ek hi notes aur ek error copy. 23:00 ke baad naya topic nahi.",
+    "Office ke teen slot zaroori hain: lunch formula, chai recall, nikalte hue 5 line.",
+    "Formula sheet ant ke pages par hai. Lunch par wahi din ki sheet.",
   ];
   for (const rule of rules) {
     for (const line of wrap(rule, font, 11, PAGE_W - MARGIN * 2 - 12)) {
@@ -315,6 +324,30 @@ function drawDay(
     y -= 8;
   }
 
+  const formulas = sheetsForDay(iso);
+  if (formulas.length > 0) {
+    if (y < 80) {
+      page = doc.addPage([PAGE_W, PAGE_H]);
+      y = header(page, bold, font, day.dateLabel, romanDay[day.weekday] ?? "", `${day.title} (contd)`, studyMinutes(slots), questions);
+    }
+    page.drawText("Formula sheet for this day", { x: MARGIN, y, size: 11, font: bold, color: NAVY });
+    y -= 14;
+    for (const sheet of formulas) {
+      for (const item of sheet.formulas) {
+        const row = pdfSafe(`${sheet.subject}: ${item.title} = ${item.expr}. ${item.note}`);
+        for (const line of wrap(row, font, 9, PAGE_W - MARGIN * 2)) {
+          if (y < 64) {
+            page = doc.addPage([PAGE_W, PAGE_H]);
+            y = header(page, bold, font, day.dateLabel, romanDay[day.weekday] ?? "", `${day.title} (contd)`, studyMinutes(slots), questions);
+          }
+          page.drawText(line, { x: MARGIN, y, size: 9, font, color: INK });
+          y -= 12;
+        }
+      }
+    }
+    y -= 8;
+  }
+
   for (const slot of slots) {
     const block = measureSlot(slot, font, bold);
     if (y - block < 48) {
@@ -430,4 +463,40 @@ function paintSlot(page: PDFPage, font: PDFFont, bold: PDFFont, slot: Slot, y: n
     y -= 12;
   }
   return y - 8;
+}
+
+function drawFormulaAppendix(doc: PDFDocument, font: PDFFont, bold: PDFFont) {
+  let page = doc.addPage([PAGE_W, PAGE_H]);
+  let y = PAGE_H - 48;
+  page.drawText("Formula sheet", { x: MARGIN, y, size: 16, font: bold, color: INK });
+  y -= 16;
+  page.drawText("Office lunch uses the day's sheet. Tick a line only when you can say it closed.", {
+    x: MARGIN,
+    y,
+    size: 9,
+    font,
+    color: MUTED,
+  });
+  y -= 22;
+  for (const sheet of formulaSheets) {
+    if (y < 90) {
+      page = doc.addPage([PAGE_W, PAGE_H]);
+      y = PAGE_H - 48;
+    }
+    page.drawText(pdfSafe(sheet.subject), { x: MARGIN, y, size: 12, font: bold, color: NAVY });
+    y -= 16;
+    for (const item of sheet.formulas) {
+      const row = pdfSafe(`${item.title}: ${item.expr}. ${item.note}`);
+      for (const line of wrap(row, font, 9, PAGE_W - MARGIN * 2)) {
+        if (y < 48) {
+          page = doc.addPage([PAGE_W, PAGE_H]);
+          y = PAGE_H - 48;
+        }
+        page.drawText(line, { x: MARGIN, y, size: 9, font, color: INK });
+        y -= 12;
+      }
+      y -= 4;
+    }
+    y -= 8;
+  }
 }

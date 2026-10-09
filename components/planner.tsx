@@ -9,6 +9,7 @@ import {
   Globe2,
   NotebookPen,
   PenLine,
+  Sigma,
   Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -40,7 +41,9 @@ import {
   weeks,
 } from "@/lib/plan";
 import { officialTopics, paperLabel, topicsOnDay } from "@/lib/official-syllabus";
+import { allFormulas } from "@/lib/formulas";
 import { SyllabusBoard } from "@/components/syllabus-board";
+import { DayFormulas, FormulaBoard } from "@/components/formula-board";
 
 const STORAGE_KEY = "sscje-cs-plan-v1";
 const publicBase = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -49,9 +52,15 @@ type Persisted = {
   checks: Record<string, boolean>;
   saturdayDuty: boolean;
   topics: Record<string, boolean>;
+  formulas: Record<string, boolean>;
 };
 
-const emptyProgress: Persisted = { checks: {}, saturdayDuty: false, topics: {} };
+const emptyProgress: Persisted = {
+  checks: {},
+  saturdayDuty: false,
+  topics: {},
+  formulas: {},
+};
 let progress = emptyProgress;
 const progressListeners = new Set<() => void>();
 let progressLoaded = false;
@@ -67,6 +76,7 @@ function ensureProgress() {
       checks: parsed.checks ?? {},
       saturdayDuty: Boolean(parsed.saturdayDuty),
       topics: parsed.topics ?? {},
+      formulas: parsed.formulas ?? {},
     };
   } catch {
     progress = emptyProgress;
@@ -128,6 +138,7 @@ const kindClass: Record<Kind, string> = {
   ga: "border-l-[#8a5a12]",
   mock: "border-l-[#9f1239]",
   review: "border-l-[#57534e]",
+  desk: "border-l-[#b45309]",
   job: "border-l-[#a8a29e]",
   buffer: "border-l-transparent",
 };
@@ -140,6 +151,7 @@ function KindIcon({ kind }: { kind: Kind }) {
   if (kind === "ga") return <Globe2 className={className} />;
   if (kind === "mock") return <Timer className={className} />;
   if (kind === "review") return <NotebookPen className={className} />;
+  if (kind === "desk") return <Sigma className={className} />;
   if (kind === "job") return <Briefcase className={className} />;
   return <Coffee className={className} />;
 }
@@ -198,7 +210,10 @@ export function Planner() {
   const checks = saved.checks;
   const saturdayDuty = saved.saturdayDuty;
   const topicsDone = saved.topics;
+  const formulasDone = saved.formulas;
   const syllabusDone = officialTopics.filter((item) => topicsDone[item.id]).length;
+  const formulaList = allFormulas();
+  const formulaDone = formulaList.filter((item) => formulasDone[item.id]).length;
   const [picked, setPicked] = useState<string | null>(null);
   const [tab, setTab] = useState("today");
   const [lockNote, setLockNote] = useState<string | null>(null);
@@ -227,6 +242,14 @@ export function Planner() {
     writeProgress({
       ...current,
       topics: { ...current.topics, [id]: value },
+    });
+  }
+
+  function setFormula(id: string, value: boolean) {
+    const current = progressSnapshot();
+    writeProgress({
+      ...current,
+      formulas: { ...current.formulas, [id]: value },
     });
   }
 
@@ -362,10 +385,10 @@ export function Planner() {
                 8 से 31 अक्टूबर
               </h1>
               <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
-                24 din mein poora syllabus aur practice. Office{" "}
-                <span className="text-foreground">10:00–19:00</span> band hai.
-                Padhai roz subah 6:00 se aur raat 8:00 ke baad. Shani–Ravi ko
-                beech ka aaram plan ka hissa hai.
+                24 din mein poora syllabus, practice, aur formula sheet. Office{" "}
+                <span className="text-foreground">10:00–19:00</span> kaam hai, beech
+                mein teen zaroori slot: lunch par formula, chai par yaad, nikalte
+                hue paanch line. Baaki padhai subah 6:00 aur raat 8:00.
               </p>
             </div>
             <div className="flex w-full flex-col gap-2 sm:w-auto">
@@ -412,7 +435,7 @@ export function Planner() {
           </div>
           <Progress value={slotPct} className="no-print">
             <ProgressLabel>
-              Slots {slotPct}% · syllabus {syllabusDone}/{officialTopics.length}
+              Slots {slotPct}% · syllabus {syllabusDone}/{officialTopics.length} · formula {formulaDone}/{formulaList.length}
             </ProgressLabel>
             <ProgressValue />
           </Progress>
@@ -433,6 +456,9 @@ export function Planner() {
             </TabsTrigger>
             <TabsTrigger className="h-8 flex-none px-3" value="syllabus">
               Syllabus
+            </TabsTrigger>
+            <TabsTrigger className="h-8 flex-none px-3" value="formula">
+              Formula
             </TabsTrigger>
           </TabsList>
 
@@ -530,6 +556,13 @@ export function Planner() {
               onToggle={setTopic}
             />
 
+            <DayFormulas
+              iso={selectedDay.iso}
+              done={formulasDone}
+              onToggle={setFormula}
+              onOpenSheet={() => setTab("formula")}
+            />
+
             <ol className="flex flex-col gap-3">
               {selectedSlots.map((slot) => (
                 <TimelineRow
@@ -562,7 +595,7 @@ export function Planner() {
                 variant="ghost"
                 onClick={() => {
                   if (window.confirm("Is device ka progress mita dun?")) {
-                    writeProgress({ checks: {}, saturdayDuty, topics: {} });
+                    writeProgress({ checks: {}, saturdayDuty, topics: {}, formulas: {} });
                   }
                 }}
               >
@@ -638,10 +671,11 @@ export function Planner() {
               <CardContent className="flex flex-col gap-2 text-sm leading-6">
                 <h2 className="font-heading text-xl font-semibold">Roz ka ghadi</h2>
                 <p>
-                  Office wale din: 6:00–7:20 theory, 7:35–8:50 practice, phir
-                  10:00–19:00 duty. Raat 8:00–8:25 GA, 8:25–9:40 technical,
-                  9:50–10:35 reasoning, 10:35–10:50 error log. Kul padhai{" "}
-                  {formatDuration(315)}.
+                  Office wale din: 6:00–7:20 theory, 7:35–8:50 practice. Duty ke
+                  beech 13:00 formula sheet, 16:30 band karke yaad, 18:50 paanch
+                  line. Raat 8:00–8:25 GA, 8:25–9:40 technical, 9:50–10:35
+                  reasoning, 10:35–10:50 error log. Kul padhai{" "}
+                  {formatDuration(357)}.
                 </p>
                 <p>
                   Shanivar chhutti: lagbhag 7–8 ghante, beech mein 12:00 se 2:30
@@ -750,6 +784,10 @@ export function Planner() {
                 </Card>
               ))}
             </div>
+          </TabsContent>
+
+          <TabsContent value="formula" className="mt-5">
+            <FormulaBoard done={formulasDone} onToggle={setFormula} />
           </TabsContent>
         </Tabs>
       </main>
@@ -1009,7 +1047,9 @@ function StrictDock({
 }) {
   const office = liveSlot?.kind === "job";
   const label = office
-    ? "Office chal raha hai. Padhai band."
+    ? focus
+      ? `Office chal raha hai. Agla zaroori kaam ${focus.start} par.`
+      : "Office ka aakhri hissa. Raat 8:00 desk."
     : focus
       ? focusChecked
         ? "Yeh slot ho chuka."

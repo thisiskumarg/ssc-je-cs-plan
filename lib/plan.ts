@@ -1,3 +1,5 @@
+import { deskCopy } from "@/lib/formulas";
+
 export type Kind =
   | "theory"
   | "practice"
@@ -5,6 +7,7 @@ export type Kind =
   | "ga"
   | "mock"
   | "review"
+  | "desk"
   | "job"
   | "buffer";
 
@@ -279,9 +282,9 @@ export const rules = [
       "Paper-I shortlist ke liye qualifying hai: Reasoning 50, GA 50, CS & IT 100, negative −0.25. Paper-II sirf CS & IT hai, 100 sawal, 300 marks, har galat par −1. Antim merit normalized Paper-II se banta hai. Isliye din ka bhaari hissa technical practice hai.",
   },
   {
-    title: "Office 10 se 7 band hai",
+    title: "Office mein teen zaroori desk slots",
     detail:
-      "Somvaar se Shukravaar 10:00–19:00 padhai ka slot nahi hai. Ghar lautne aur khaane ka ek ghanta alag hai. Padhai subah 6:00–8:50 aur raat 8:00–10:50. Shani aur Ravi ko beech ka lamba aaram plan ka hissa hai, extra chapter nahi.",
+      "10:00–19:00 kaam hai, par beech mein teen slot chhootenge nahi: 13:00–13:20 aaj ki formula sheet aur 6 MCQ, 16:30–16:42 band karke yaad, 18:50–19:00 paanch line pocket card. Naya chapter office mein nahi. Baaki padhai subah 6:00–8:50 aur raat 8:00–10:50.",
   },
   {
     title: "Ek source, ek error copy",
@@ -2080,6 +2083,78 @@ function validatePlan() {
   }
 }
 
+function deskBlock(iso: string): Slot[] {
+  const copy = deskCopy(iso);
+  return [
+    {
+      id: `${iso}-job-am`,
+      start: "10:00",
+      end: "13:00",
+      kind: "job",
+      title: "Office, subah",
+      detail: copy.morning,
+    },
+    {
+      id: `${iso}-desk-lunch`,
+      start: "13:00",
+      end: "13:20",
+      kind: "desk",
+      title: copy.lunchTitle,
+      detail: copy.lunch,
+      tech: copy.lunchTech,
+    },
+    {
+      id: `${iso}-job-mid`,
+      start: "13:20",
+      end: "16:30",
+      kind: "job",
+      title: "Office, dopahar",
+      detail: copy.mid,
+    },
+    {
+      id: `${iso}-desk-tea`,
+      start: "16:30",
+      end: "16:42",
+      kind: "desk",
+      title: copy.teaTitle,
+      detail: copy.tea,
+    },
+    {
+      id: `${iso}-job-pm`,
+      start: "16:42",
+      end: "18:50",
+      kind: "job",
+      title: "Office, shaam",
+      detail: copy.pm,
+    },
+    {
+      id: `${iso}-desk-out`,
+      start: "18:50",
+      end: "19:00",
+      kind: "desk",
+      title: copy.outTitle,
+      detail: copy.out,
+    },
+  ];
+}
+
+function expandOffice(list: Slot[]) {
+  const out: Slot[] = [];
+  for (const item of list) {
+    if (item.kind === "job" && item.start === "10:00" && item.end === "19:00") {
+      out.push(...deskBlock(item.id.slice(0, 10)));
+    } else {
+      out.push(item);
+    }
+  }
+  return out;
+}
+
+for (const day of days) {
+  day.slots = expandOffice(day.slots);
+  if (day.dutySlots) day.dutySlots = expandOffice(day.dutySlots);
+}
+
 validatePlan();
 
 export function slotsFor(day: DayPlan, saturdayDuty: boolean) {
@@ -2151,6 +2226,7 @@ export const kindLabel: Record<Kind, string> = {
   ga: "GA",
   mock: "Mock",
   review: "Error log",
+  desk: "Office desk",
   job: "Office",
   buffer: "Break",
 };

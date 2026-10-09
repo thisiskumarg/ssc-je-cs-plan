@@ -19,7 +19,7 @@ const serif = Noto_Serif_Devanagari({
 export const metadata: Metadata = {
   title: "SSC JE CS — 8 se 31 October",
   description:
-    "SSC JE 2026 Computer Science & IT ka 24 din ka plan. Job 10 se 7, roz practice ke saath.",
+    "SSC JE 2026 Computer Science & IT ka 24 din ka plan. Office mein formula sheet, subah aur raat practice.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
