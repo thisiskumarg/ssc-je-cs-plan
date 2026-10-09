@@ -40,7 +40,9 @@ import {
   tally,
   weeks,
 } from "@/lib/plan";
-import { officialTopics, paperLabel, topicsOnDay } from "@/lib/official-syllabus";
+import { officialTopics, topicsOnDay } from "@/lib/official-syllabus";
+import { SubtopicUnit } from "@/components/subtopic-unit";
+import { subtopicPack } from "@/lib/subtopic-learn";
 import { allFormulas } from "@/lib/formulas";
 import { SyllabusBoard } from "@/components/syllabus-board";
 import { DayFormulas, FormulaBoard } from "@/components/formula-board";
@@ -61,6 +63,7 @@ type Persisted = {
   pyqs: Record<string, boolean>;
   videos: Record<string, boolean>;
   points: Record<string, boolean>;
+  subpyq: Record<string, boolean>;
 };
 
 const emptyProgress: Persisted = {
@@ -72,6 +75,7 @@ const emptyProgress: Persisted = {
   pyqs: {},
   videos: {},
   points: {},
+  subpyq: {},
 };
 let progress = emptyProgress;
 const progressListeners = new Set<() => void>();
@@ -93,6 +97,7 @@ function ensureProgress() {
       pyqs: parsed.pyqs ?? {},
       videos: parsed.videos ?? {},
       points: parsed.points ?? {},
+      subpyq: parsed.subpyq ?? {},
     };
   } catch {
     progress = emptyProgress;
@@ -239,6 +244,8 @@ export function Planner() {
   const pyqSolved = pyqList.filter((item) => pyqDone[item.id]).length;
   const videoList = allTopicVideos();
   const videoSeen = videoList.filter((item) => videosDone[item.yt]).length;
+  const subpyqDone = saved.subpyq;
+  const subPyqSolved = officialTopics.filter((item) => subpyqDone[`sub-${item.id}`]).length;
   const [picked, setPicked] = useState<string | null>(null);
   const [tab, setTab] = useState("today");
   const [lockNote, setLockNote] = useState<string | null>(null);
@@ -307,6 +314,14 @@ export function Planner() {
     writeProgress({
       ...current,
       points: { ...current.points, [id]: value },
+    });
+  }
+
+  function setSubpyq(id: string, value: boolean) {
+    const current = progressSnapshot();
+    writeProgress({
+      ...current,
+      subpyq: { ...current.subpyq, [id]: value },
     });
   }
 
@@ -492,7 +507,7 @@ export function Planner() {
           </div>
           <Progress value={slotPct} className="no-print">
             <ProgressLabel>
-              Slots {slotPct}% · video {videoSeen}/{videoList.length} · PYQ {pyqSolved}/{pyqList.length} · sheets {sheetDone}/{studySheets.length} · syllabus {syllabusDone}/{officialTopics.length} · formula {formulaDone}/{formulaList.length}
+              Slots {slotPct}% · video {videoSeen}/{videoList.length} · PYQ {pyqSolved}/{pyqList.length} · sub PYQ {subPyqSolved}/{officialTopics.length} · sheets {sheetDone}/{studySheets.length} · syllabus {syllabusDone}/{officialTopics.length} · formula {formulaDone}/{formulaList.length}
             </ProgressLabel>
             <ProgressValue />
           </Progress>
@@ -614,6 +629,8 @@ export function Planner() {
               iso={selectedDay.iso}
               done={topicsDone}
               onToggle={setTopic}
+              pyqDone={subpyqDone}
+              onTogglePyq={setSubpyq}
             />
 
             <DayFormulas
@@ -689,6 +706,7 @@ export function Planner() {
                       pyqs: {},
                       videos: {},
                       points: {},
+                      subpyq: {},
                     });
                   }
                 }}
@@ -864,6 +882,8 @@ export function Planner() {
             <SyllabusBoard
               done={topicsDone}
               onToggle={setTopic}
+              pyqDone={subpyqDone}
+              onTogglePyq={setSubpyq}
               onOpenDay={openDay}
             />
             <div className="grid gap-3">
@@ -928,44 +948,56 @@ function DaySyllabus({
   iso,
   done,
   onToggle,
+  pyqDone,
+  onTogglePyq,
 }: {
   iso: string;
   done: Record<string, boolean>;
   onToggle: (id: string, value: boolean) => void;
+  pyqDone: Record<string, boolean>;
+  onTogglePyq: (id: string, value: boolean) => void;
 }) {
-  const items = topicsOnDay(iso);
+  const items = topicsOnDay(iso).slice().sort((a, b) => {
+    const packA = subtopicPack(a.id);
+    const packB = subtopicPack(b.id);
+    return windowStart(packA?.window ?? "") - windowStart(packB?.window ?? "");
+  });
   if (items.length === 0) return null;
   const finished = items.filter((item) => done[item.id]).length;
   return (
     <Card>
-      <CardContent className="flex flex-col gap-2">
+      <CardContent className="flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="font-heading text-lg font-semibold">Is din ki syllabus lines</h3>
+          <h3 className="font-heading text-lg font-semibold">Is din ke subtopics</h3>
           <span className="text-xs tabular-nums text-muted-foreground">
             {finished}/{items.length}
           </span>
         </div>
-        <ul className="flex flex-col">
+        <p className="text-sm leading-6 text-muted-foreground">
+          Har line ka window isi din ke diye hue slot ke andar hai. Us ghadi par
+          video isi card mein chalao, page kholo, aur utne PYQ isi window mein karo.
+        </p>
+        <div className="flex flex-col gap-3">
           {items.map((item) => (
-            <li key={item.id} className="flex items-start gap-3 py-1.5">
-              <Checkbox
-                checked={Boolean(done[item.id])}
-                onCheckedChange={(value) => onToggle(item.id, Boolean(value))}
-                aria-label={item.text}
-                className="mt-0.5 size-5"
-              />
-              <div>
-                <p className="text-sm leading-6">{item.text}</p>
-                <p className="text-xs text-muted-foreground">
-                  {paperLabel(item.paper)} · {item.code} · {item.section}
-                </p>
-              </div>
-            </li>
+            <SubtopicUnit
+              key={item.id}
+              item={item}
+              done={Boolean(done[item.id])}
+              onToggle={onToggle}
+              pyqDone={pyqDone}
+              onTogglePyq={onTogglePyq}
+            />
           ))}
-        </ul>
+        </div>
       </CardContent>
     </Card>
   );
+}
+
+function windowStart(window: string) {
+  const match = window.match(/(\d{2}):(\d{2})/);
+  if (!match) return 0;
+  return Number(match[1]) * 60 + Number(match[2]);
 }
 
 function Stat({

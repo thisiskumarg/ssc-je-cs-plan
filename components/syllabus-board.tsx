@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SubtopicUnit } from "@/components/subtopic-unit";
 import { dayByIso } from "@/lib/plan";
 import {
   officialTopics,
@@ -18,10 +19,14 @@ type Filter = "all" | "left" | "I" | "II";
 export function SyllabusBoard({
   done,
   onToggle,
+  pyqDone,
+  onTogglePyq,
   onOpenDay,
 }: {
   done: Record<string, boolean>;
   onToggle: (id: string, value: boolean) => void;
+  pyqDone: Record<string, boolean>;
+  onTogglePyq: (id: string, value: boolean) => void;
   onOpenDay: (iso: string) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -59,9 +64,9 @@ export function SyllabusBoard({
             </span>
           </div>
           <p className="text-sm leading-6 text-muted-foreground">
-            Paper-I is 14.2.1 reasoning, 14.2.2 general awareness, and the same
-            Part-D list. Paper-II is 14.3.4, every line below. Tick a line when
-            that day&apos;s slot is actually done. The tick stays on this phone.
+            Har line ka window us din ke diye hue slot ke andar hai. Line kholo:
+            lecture isi card mein, page, aur utne PYQ. Tick tab jab woh window ho
+            chuki ho. Tick isi phone par rehta hai.
           </p>
           <input
             value={query}
@@ -122,6 +127,8 @@ export function SyllabusBoard({
                     item={item}
                     checked={Boolean(done[item.id])}
                     onToggle={onToggle}
+                    pyqDone={pyqDone}
+                    onTogglePyq={onTogglePyq}
                     onOpenDay={onOpenDay}
                   />
                 ))}
@@ -138,38 +145,61 @@ function TopicRow({
   item,
   checked,
   onToggle,
+  pyqDone,
+  onTogglePyq,
   onOpenDay,
 }: {
   item: OfficialTopic;
   checked: boolean;
   onToggle: (id: string, value: boolean) => void;
+  pyqDone: Record<string, boolean>;
+  onTogglePyq: (id: string, value: boolean) => void;
   onOpenDay: (iso: string) => void;
 }) {
   const day = dayByIso(item.day);
   return (
-    <li className="flex items-start gap-3 border-b border-border/70 py-2 last:border-b-0">
-      <Checkbox
-        checked={checked}
-        onCheckedChange={(value) => onToggle(item.id, Boolean(value))}
-        aria-label={item.text}
-        className="mt-1 size-5"
-      />
-      <div className="min-w-0 flex-1">
-        <p className={`text-sm leading-6 ${checked ? "text-muted-foreground line-through" : ""}`}>
-          {item.text}
-        </p>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{paperLabel(item.paper)}</Badge>
-          <span className="text-xs text-muted-foreground">{item.code}</span>
-          <button
-            type="button"
-            className="text-xs font-medium underline"
-            onClick={() => onOpenDay(item.day)}
-          >
-            {day.dateLabel}
-          </button>
+    <li className="border-b border-border/70 py-2 last:border-b-0">
+      <details>
+        <summary className="flex cursor-pointer list-none items-start gap-3">
+          <Checkbox
+            checked={checked}
+            onCheckedChange={(value) => onToggle(item.id, Boolean(value))}
+            onClick={(event) => event.stopPropagation()}
+            aria-label={item.text}
+            className="mt-1 size-5"
+          />
+          <div className="min-w-0 flex-1">
+            <p className={`text-sm leading-6 ${checked ? "text-muted-foreground line-through" : ""}`}>
+              {item.text}
+            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Badge variant="outline">{paperLabel(item.paper)}</Badge>
+              <span className="text-xs text-muted-foreground">{item.code}</span>
+              <button
+                type="button"
+                className="text-xs font-medium underline"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onOpenDay(item.day);
+                }}
+              >
+                {day.dateLabel}
+              </button>
+              <span className="text-xs text-muted-foreground">Kholo: video, page, PYQ</span>
+            </div>
+          </div>
+        </summary>
+        <div className="pt-3">
+          <SubtopicUnit
+            item={item}
+            done={checked}
+            onToggle={onToggle}
+            pyqDone={pyqDone}
+            onTogglePyq={onTogglePyq}
+          />
         </div>
-      </div>
+      </details>
     </li>
   );
 }
