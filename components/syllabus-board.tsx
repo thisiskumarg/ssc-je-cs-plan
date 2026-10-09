@@ -65,7 +65,7 @@ export function SyllabusBoard({
           </div>
           <p className="text-sm leading-6 text-muted-foreground">
             Har line ka window us din ke diye hue slot ke andar hai. Line kholo:
-            lecture isi card mein, page, aur utne PYQ. Tick tab jab woh window ho
+            lecture bade player mein, page, aur utne PYQ. Tick tab jab woh window ho
             chuki ho. Tick isi phone par rehta hai.
           </p>
           <input

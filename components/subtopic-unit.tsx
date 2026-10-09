@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { LectureStage } from "@/components/lecture-stage";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { subtopicPack } from "@/lib/subtopic-learn";
@@ -43,7 +44,7 @@ export function SubtopicUnit({
       </div>
 
       <div className="flex flex-col gap-2">
-        <h4 className="text-sm font-medium">Suno, isi card mein</h4>
+        <h4 className="text-sm font-medium">Suno, bade player mein</h4>
         {pack.listen.map((video) => (
           <div key={video.yt} className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -56,19 +57,16 @@ export function SubtopicUnit({
                 variant={playing === video.yt ? "secondary" : "default"}
                 onClick={() => setPlaying(video.yt)}
               >
-                {playing === video.yt ? "Yahin chal rahi hai" : "Yahin chalao"}
+                {playing === video.yt ? "Player khula hai" : "Yahin chalao"}
               </Button>
             </div>
             {playing === video.yt ? (
-              <div className="aspect-video w-full overflow-hidden rounded-lg bg-black">
-                <iframe
-                  className="h-full w-full"
-                  src={`https://www.youtube-nocookie.com/embed/${video.yt}?rel=0`}
-                  title={video.title}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                />
-              </div>
+              <LectureStage
+                yt={video.yt}
+                title={video.title}
+                who={video.who}
+                onClose={() => setPlaying(null)}
+              />
             ) : null}
           </div>
         ))}

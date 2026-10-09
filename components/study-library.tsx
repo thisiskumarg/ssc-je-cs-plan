@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { LectureStage } from "@/components/lecture-stage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -201,7 +202,7 @@ function SheetPlayer({
     <div className="flex flex-col gap-2 rounded-lg border border-border/70 p-3">
       <h4 className="text-sm font-medium">Yahin dekho</h4>
       <p className="text-sm leading-6 text-muted-foreground">
-        Video isi card mein chalegi. {video.why}
+        Video bade player mein khulegi. Play, seek, awaz aur speed yahin se. {video.why}
       </p>
       <div className="flex flex-col gap-2">
         {videos.map((item, index) => (
@@ -214,6 +215,7 @@ function SheetPlayer({
               setActive(index);
               setPlaying(item.yt);
             }}
+            onClose={() => setPlaying(null)}
             onToggle={onToggleVideo}
           />
         ))}
@@ -227,12 +229,14 @@ function VideoRow({
   open,
   watched,
   onPlay,
+  onClose,
   onToggle,
 }: {
   item: TopicVideo;
   open: boolean;
   watched: boolean;
   onPlay: () => void;
+  onClose: () => void;
   onToggle: (id: string, value: boolean) => void;
 }) {
   return (
@@ -258,20 +262,17 @@ function VideoRow({
             className="mt-2"
             onClick={onPlay}
           >
-            {open ? "Yahin chal rahi hai" : "Yahin chalao"}
+            {open ? "Player khula hai" : "Yahin chalao"}
           </Button>
         </div>
       </div>
       {open ? (
-        <div className="aspect-video w-full overflow-hidden rounded-lg bg-black">
-          <iframe
-            className="h-full w-full"
-            src={`https://www.youtube-nocookie.com/embed/${item.yt}?rel=0`}
-            title={item.title}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
-        </div>
+        <LectureStage
+          yt={item.yt}
+          title={item.title}
+          who={item.who}
+          onClose={onClose}
+        />
       ) : null}
     </div>
   );
@@ -401,8 +402,8 @@ export function SheetLibrary({
             </span>
           </div>
           <p className="text-sm leading-6 text-muted-foreground">
-            Har sheet us ghadi par khulti hai jab slot start hota hai. Video isi
-            card mein chalegi, usi se us sheet ke points cover karo. Aage ke din ki
+            Har sheet us ghadi par khulti hai jab slot start hota hai. Video bade
+            player mein chalegi, usi se us sheet ke points cover karo. Aage ke din ki
             sheets yahin hain. Point ka tick matlab woh hissa ho gaya.
           </p>
           <input
