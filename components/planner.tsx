@@ -46,6 +46,7 @@ import { SyllabusBoard } from "@/components/syllabus-board";
 import { DayFormulas, FormulaBoard } from "@/components/formula-board";
 import { DaySheets, SheetLibrary, slotSheets } from "@/components/study-library";
 import { studySheets, type StudySheet } from "@/lib/study-sheets";
+import { allPyqSets } from "@/lib/sheet-links";
 
 const STORAGE_KEY = "sscje-cs-plan-v1";
 const publicBase = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -56,6 +57,7 @@ type Persisted = {
   topics: Record<string, boolean>;
   formulas: Record<string, boolean>;
   sheets: Record<string, boolean>;
+  pyqs: Record<string, boolean>;
 };
 
 const emptyProgress: Persisted = {
@@ -64,6 +66,7 @@ const emptyProgress: Persisted = {
   topics: {},
   formulas: {},
   sheets: {},
+  pyqs: {},
 };
 let progress = emptyProgress;
 const progressListeners = new Set<() => void>();
@@ -82,6 +85,7 @@ function ensureProgress() {
       topics: parsed.topics ?? {},
       formulas: parsed.formulas ?? {},
       sheets: parsed.sheets ?? {},
+      pyqs: parsed.pyqs ?? {},
     };
   } catch {
     progress = emptyProgress;
@@ -217,10 +221,13 @@ export function Planner() {
   const topicsDone = saved.topics;
   const formulasDone = saved.formulas;
   const sheetsRead = saved.sheets;
+  const pyqDone = saved.pyqs;
   const syllabusDone = officialTopics.filter((item) => topicsDone[item.id]).length;
   const formulaList = allFormulas();
   const formulaDone = formulaList.filter((item) => formulasDone[item.id]).length;
   const sheetDone = studySheets.filter((item) => sheetsRead[item.id]).length;
+  const pyqList = allPyqSets();
+  const pyqSolved = pyqList.filter((item) => pyqDone[item.id]).length;
   const [picked, setPicked] = useState<string | null>(null);
   const [tab, setTab] = useState("today");
   const [lockNote, setLockNote] = useState<string | null>(null);
@@ -265,6 +272,14 @@ export function Planner() {
     writeProgress({
       ...current,
       sheets: { ...current.sheets, [id]: value },
+    });
+  }
+
+  function setPyq(id: string, value: boolean) {
+    const current = progressSnapshot();
+    writeProgress({
+      ...current,
+      pyqs: { ...current.pyqs, [id]: value },
     });
   }
 
@@ -450,7 +465,7 @@ export function Planner() {
           </div>
           <Progress value={slotPct} className="no-print">
             <ProgressLabel>
-              Slots {slotPct}% · sheets {sheetDone}/{studySheets.length} · syllabus {syllabusDone}/{officialTopics.length} · formula {formulaDone}/{formulaList.length}
+              Slots {slotPct}% · PYQ {pyqSolved}/{pyqList.length} · sheets {sheetDone}/{studySheets.length} · syllabus {syllabusDone}/{officialTopics.length} · formula {formulaDone}/{formulaList.length}
             </ProgressLabel>
             <ProgressValue />
           </Progress>
@@ -586,6 +601,8 @@ export function Planner() {
               saturdayDuty={saturdayDuty}
               read={sheetsRead}
               onToggle={setSheet}
+              pyqDone={pyqDone}
+              onTogglePyq={setPyq}
               highlightId={
                 selected === todayIso && focus
                   ? slotSheets(selectedDay.iso, focus.start, saturdayDuty)[0]?.id
@@ -638,6 +655,7 @@ export function Planner() {
                       topics: {},
                       formulas: {},
                       sheets: {},
+                      pyqs: {},
                     });
                   }
                 }}
@@ -839,6 +857,8 @@ export function Planner() {
               todayIso={todayIso}
               read={sheetsRead}
               onToggle={setSheet}
+              pyqDone={pyqDone}
+              onTogglePyq={setPyq}
               onOpenDay={openDay}
             />
           </TabsContent>

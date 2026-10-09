@@ -13,6 +13,7 @@ import {
   studySheets,
   type StudySheet,
 } from "@/lib/study-sheets";
+import { sheetPack } from "@/lib/sheet-links";
 
 export function SheetBody({ sheet }: { sheet: StudySheet }) {
   return (
@@ -38,12 +39,16 @@ export function DaySheets({
   saturdayDuty,
   read,
   onToggle,
+  pyqDone,
+  onTogglePyq,
   highlightId,
 }: {
   iso: string;
   saturdayDuty: boolean;
   read: Record<string, boolean>;
   onToggle: (id: string, value: boolean) => void;
+  pyqDone: Record<string, boolean>;
+  onTogglePyq: (id: string, value: boolean) => void;
   highlightId?: string | null;
 }) {
   const rows = sheetsOnDay(iso, saturdayDuty);
@@ -64,6 +69,8 @@ export function DaySheets({
           times={times}
           read={Boolean(read[sheet.id])}
           onToggle={onToggle}
+          pyqDone={pyqDone}
+          onTogglePyq={onTogglePyq}
           highlight={highlightId === sheet.id}
         />
       ))}
@@ -76,12 +83,16 @@ export function SheetCard({
   times,
   read,
   onToggle,
+  pyqDone,
+  onTogglePyq,
   highlight,
 }: {
   sheet: StudySheet;
   times: string[];
   read: boolean;
   onToggle: (id: string, value: boolean) => void;
+  pyqDone: Record<string, boolean>;
+  onTogglePyq: (id: string, value: boolean) => void;
   highlight?: boolean;
 }) {
   return (
@@ -108,8 +119,81 @@ export function SheetCard({
           </div>
         </div>
         <SheetBody sheet={sheet} />
+        <SheetSources
+          sheetId={sheet.id}
+          pyqDone={pyqDone}
+          onTogglePyq={onTogglePyq}
+        />
       </CardContent>
     </Card>
+  );
+}
+
+function SheetSources({
+  sheetId,
+  pyqDone,
+  onTogglePyq,
+}: {
+  sheetId: string;
+  pyqDone?: Record<string, boolean>;
+  onTogglePyq?: (id: string, value: boolean) => void;
+}) {
+  const pack = sheetPack(sheetId);
+  if (!pack) return null;
+  return (
+    <div className="flex flex-col gap-3 border-t border-border/70 pt-3">
+      <div>
+        <h4 className="text-sm font-medium">Inhe khol kar padho</h4>
+        <ul className="mt-1 flex flex-col gap-1">
+          {pack.refs.map((item) => (
+            <li key={item.href}>
+              <a
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm leading-6 underline"
+              >
+                {item.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {pack.pyq ? (
+        <div>
+          <h4 className="text-sm font-medium">
+            PYQ, {pack.pyq.window}
+            {pack.pyq.count > 0 ? ` · ${pack.pyq.count} sawal` : ""}
+          </h4>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">{pack.pyq.note}</p>
+          <ul className="mt-2 flex flex-col gap-2">
+            {pack.pyq.sets.map((item) => (
+              <li key={item.id} className="flex items-start gap-3">
+                {onTogglePyq ? (
+                  <Checkbox
+                    checked={Boolean(pyqDone?.[item.id])}
+                    onCheckedChange={(value) => onTogglePyq(item.id, Boolean(value))}
+                    aria-label={item.title}
+                    className="mt-1 size-5"
+                  />
+                ) : null}
+                <div>
+                  <a
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium underline"
+                  >
+                    {item.title}
+                  </a>
+                  <p className="text-sm leading-6 text-muted-foreground">{item.do}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -118,12 +202,16 @@ export function SheetLibrary({
   todayIso,
   read,
   onToggle,
+  pyqDone,
+  onTogglePyq,
   onOpenDay,
 }: {
   saturdayDuty: boolean;
   todayIso: string;
   read: Record<string, boolean>;
   onToggle: (id: string, value: boolean) => void;
+  pyqDone: Record<string, boolean>;
+  onTogglePyq: (id: string, value: boolean) => void;
   onOpenDay: (iso: string) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -209,6 +297,8 @@ export function SheetLibrary({
                 times={times}
                 read={Boolean(read[sheet.id])}
                 onToggle={onToggle}
+                pyqDone={pyqDone}
+                onTogglePyq={onTogglePyq}
               />
             ))}
           </section>
