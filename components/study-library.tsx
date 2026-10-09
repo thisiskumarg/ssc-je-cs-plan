@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import { Badge } from "@/components/ui/badge";
 import { enterLectureFullscreen, LectureStage } from "@/components/lecture-stage";
 import { Button } from "@/components/ui/button";
@@ -212,9 +213,11 @@ function SheetPlayer({
             open={playing === item.yt}
             watched={Boolean(videosDone[item.yt])}
             onPlay={() => {
+              flushSync(() => {
+                setActive(index);
+                setPlaying(item.yt);
+              });
               enterLectureFullscreen();
-              setActive(index);
-              setPlaying(item.yt);
             }}
             onClose={() => setPlaying(null)}
             onToggle={onToggleVideo}

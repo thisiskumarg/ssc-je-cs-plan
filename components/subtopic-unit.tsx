@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { flushSync } from "react-dom";
 import { enterLectureFullscreen, LectureStage } from "@/components/lecture-stage";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -56,8 +57,8 @@ export function SubtopicUnit({
                 size="sm"
                 variant={playing === video.yt ? "secondary" : "default"}
                 onClick={() => {
+                  flushSync(() => setPlaying(video.yt));
                   enterLectureFullscreen();
-                  setPlaying(video.yt);
                 }}
               >
                 {playing === video.yt ? "Player khula hai" : "Yahin chalao"}

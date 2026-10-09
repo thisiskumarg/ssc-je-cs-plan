@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Noto_Sans_Devanagari, Noto_Serif_Devanagari } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,12 @@ const serif = Noto_Serif_Devanagari({
   variable: "--font-serif",
   display: "swap",
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   title: "SSC JE CS — 8 se 31 October",

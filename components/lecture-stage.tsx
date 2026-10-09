@@ -32,6 +32,7 @@ type YTPlayer = {
   getVolume: () => number;
   setPlaybackRate: (rate: number) => void;
   getPlaybackRate: () => number;
+  setSize?: (width: number, height: number) => void;
   destroy: () => void;
   loadModule?: (name: string) => void;
   unloadModule?: (name: string) => void;
@@ -102,22 +103,57 @@ const mounted = {
 
 let ownsFullscreen = false;
 
-/** Call from the same tap that opens the lecture, so the browser allows fullscreen. */
+function unlockOrientation() {
+  const orientation = screen.orientation as ScreenOrientation & { unlock?: () => void };
+  try {
+    orientation?.unlock?.();
+  } catch {
+    /* this browser keeps rotation free already */
+  }
+}
+
+function releasePageSize() {
+  document.documentElement.style.removeProperty("width");
+  document.documentElement.style.removeProperty("height");
+  document.body.style.removeProperty("width");
+  document.body.style.removeProperty("height");
+}
+
+export function fitLectureStage(stage: HTMLElement | null, player: YTPlayer | null) {
+  if (!stage) return;
+  const width = Math.max(1, stage.clientWidth);
+  const height = Math.max(1, stage.clientHeight);
+  stage.querySelectorAll("iframe").forEach((frame) => {
+    frame.style.setProperty("width", "100%", "important");
+    frame.style.setProperty("height", "100%", "important");
+  });
+  try {
+    player?.setSize?.(width, height);
+  } catch {
+    /* player is still starting */
+  }
+}
+
+/** Call in the same tap, after the player is already in the page. */
 export function enterLectureFullscreen() {
-  const root = document.documentElement as HTMLElement & {
-    webkitRequestFullscreen?: () => Promise<void> | void;
-  };
-  if (document.fullscreenElement) return;
-  const request = root.requestFullscreen?.bind(root) ?? root.webkitRequestFullscreen?.bind(root);
+  const node = document.getElementById("lecture-stage") as
+    | (HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void })
+    | null;
+  if (!node || document.fullscreenElement) return;
+  const request = node.requestFullscreen?.bind(node) ?? node.webkitRequestFullscreen?.bind(node);
   if (!request) return;
+  unlockOrientation();
   Promise.resolve(request())
     .then(() => {
       ownsFullscreen = true;
+      unlockOrientation();
     })
     .catch(() => {});
 }
 
 export function leaveLectureFullscreen() {
+  unlockOrientation();
+  releasePageSize();
   if (!ownsFullscreen || !document.fullscreenElement) {
     ownsFullscreen = false;
     return;
@@ -198,9 +234,32 @@ export function LectureStage({
   }, [onClose]);
 
   useEffect(() => {
-    const onChange = () => setFull(Boolean(document.fullscreenElement));
+    const fit = () => fitLectureStage(stageRef.current, playerRef.current);
+    const onChange = () => {
+      const active = Boolean(document.fullscreenElement);
+      setFull(active);
+      if (!active) {
+        ownsFullscreen = false;
+        unlockOrientation();
+        releasePageSize();
+      }
+      requestAnimationFrame(() => {
+        fit();
+        requestAnimationFrame(fit);
+      });
+    };
     document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
+    document.addEventListener("webkitfullscreenchange", onChange);
+    window.addEventListener("resize", fit);
+    window.addEventListener("orientationchange", fit);
+    window.visualViewport?.addEventListener("resize", fit);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      document.removeEventListener("webkitfullscreenchange", onChange);
+      window.removeEventListener("resize", fit);
+      window.removeEventListener("orientationchange", fit);
+      window.visualViewport?.removeEventListener("resize", fit);
+    };
   }, []);
 
   useEffect(() => {
@@ -230,6 +289,7 @@ export function LectureStage({
             onReady: (event: { target: YTPlayer }) => {
               if (dead) return;
               playerRef.current = event.target;
+              fitLectureStage(stageRef.current, event.target);
               setReady(true);
               event.target.playVideo();
               setPlaying(true);
@@ -386,6 +446,7 @@ export function LectureStage({
 
   const stage = (
     <div
+      id="lecture-stage"
       ref={stageRef}
       role="dialog"
       aria-modal="true"
@@ -413,7 +474,7 @@ export function LectureStage({
           <div className={`h-full w-full overflow-hidden ${zoom ? "scale-[1.35]" : ""}`}>
             <div
               id="lecture-stage-player"
-              className="pointer-events-none h-full w-full [&_iframe]:pointer-events-none [&_iframe]:h-full [&_iframe]:w-full"
+              className="pointer-events-none h-full w-full [&_iframe]:pointer-events-none [&_iframe]:!h-full [&_iframe]:!w-full"
             />
           </div>
         )}
