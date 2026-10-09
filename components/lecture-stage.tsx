@@ -1,7 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import {
+  Captions,
+  Maximize2,
+  Minimize2,
+  Pause,
+  Play,
+  RotateCcw,
+  RotateCw,
+  Volume2,
+  VolumeX,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 
 type CaptionTrack = { languageCode?: string; languageName?: string };
 
@@ -278,6 +292,25 @@ export function LectureStage({
     }
   }
 
+  function seekTo(next: number) {
+    const player = playerRef.current;
+    if (!player) return;
+    const clamped = Math.min(Math.max(0, next), duration || 0);
+    player.seekTo(clamped, true);
+    setTime(clamped);
+    setEnded(false);
+  }
+
+  function setLevel(next: number) {
+    const player = playerRef.current;
+    if (!player) return;
+    player.setVolume(next);
+    if (next === 0) player.mute();
+    else player.unMute();
+    setVolume(next);
+    setMuted(next === 0);
+  }
+
   if (!open) return null;
 
   const stage = (
@@ -286,156 +319,149 @@ export function LectureStage({
       role="dialog"
       aria-modal="true"
       aria-label={`${title} player`}
-      className="fixed inset-0 z-[60] flex flex-col bg-zinc-950 text-white"
+      className="fixed inset-0 z-[60] flex flex-col bg-background text-foreground"
     >
-      <div className="flex items-center gap-3 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-semibold">{title}</p>
-          <p className="truncate text-sm text-white/70">{who} · yahin chalao, YouTube app nahi</p>
-        </div>
+      <header className="flex items-center gap-3 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
         <button
           type="button"
-          className="h-12 shrink-0 rounded-lg bg-white px-4 text-base font-semibold text-black"
+          className="grid size-11 shrink-0 place-items-center rounded-full border border-border bg-card"
           onClick={onClose}
+          aria-label="Band karo"
         >
-          Band karo
+          <X className="size-5" />
         </button>
-      </div>
+        <div className="min-w-0">
+          <p className="truncate font-heading text-lg leading-tight font-semibold">{title}</p>
+          <p className="truncate text-sm text-muted-foreground">{who}</p>
+        </div>
+      </header>
 
-      <div className={`relative mx-auto w-full max-w-5xl bg-black ${full ? "min-h-0 flex-1" : "h-[min(52dvh,640px)]"}`}>
-        {fallback ? (
-          <iframe
-            className="h-full w-full"
-            src={`https://www.youtube-nocookie.com/embed/${yt}?autoplay=1&rel=0&modestbranding=1&playsinline=1&controls=1&fs=1&iv_load_policy=3`}
-            title={title}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        ) : (
-          <div className="absolute inset-0 overflow-hidden">
-            <div
-              className={
-                zoom
-                  ? "absolute top-1/2 left-1/2 h-[145%] w-[145%] -translate-x-1/2 -translate-y-1/2"
-                  : "absolute inset-0"
-              }
-            >
-              <div id="lecture-stage-player" className="h-full w-full [&_iframe]:h-full [&_iframe]:w-full" />
+      <div className="bg-black">
+        <div className="relative mx-auto aspect-video w-[min(100%,calc(42dvh*16/9))] max-w-5xl">
+          {fallback ? (
+            <iframe
+              className="absolute inset-0 h-full w-full"
+              src={`https://www.youtube-nocookie.com/embed/${yt}?autoplay=1&rel=0&modestbranding=1&playsinline=1&controls=1&fs=1&iv_load_policy=3`}
+              title={title}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          ) : (
+            <div className="absolute inset-0 overflow-hidden">
+              <div
+                className={
+                  zoom
+                    ? "absolute top-1/2 left-1/2 h-[145%] w-[145%] -translate-x-1/2 -translate-y-1/2"
+                    : "absolute inset-0"
+                }
+              >
+                <div
+                  id="lecture-stage-player"
+                  className="pointer-events-none h-full w-full [&_iframe]:pointer-events-none [&_iframe]:h-full [&_iframe]:w-full"
+                />
+              </div>
             </div>
-          </div>
-        )}
-        {ended && !fallback ? (
-          <button
-            type="button"
-            className="absolute inset-0 flex items-center justify-center bg-black/75 text-xl font-semibold"
-            onClick={togglePlay}
-          >
-            Dobara chalao
-          </button>
-        ) : null}
+          )}
+          {!fallback && !ready ? (
+            <p className="absolute inset-0 grid place-items-center text-sm text-white/80">Lecture khul rahi hai</p>
+          ) : null}
+          {!fallback && ended ? (
+            <button
+              type="button"
+              className="absolute inset-0 grid place-items-center bg-black/55"
+              onClick={togglePlay}
+              aria-label="Dobara chalao"
+            >
+              <span className="grid size-16 place-items-center rounded-full bg-card text-foreground">
+                <RotateCw className="size-7" />
+              </span>
+            </button>
+          ) : null}
+          {!fallback && ready && !ended ? (
+            <button
+              type="button"
+              className="absolute inset-0 grid place-items-center"
+              onClick={togglePlay}
+              aria-label={playing ? "Roko" : "Chalao"}
+            >
+              {playing ? null : (
+                <span className="grid size-16 place-items-center rounded-full bg-card/95 text-foreground shadow-sm">
+                  <Play className="size-7 fill-current" />
+                </span>
+              )}
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 overflow-y-auto px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 overflow-y-auto px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {fallback ? (
-          <p className="text-sm leading-6 text-white/80">
-            Video badi screen par hai. Play, seek, awaz, speed aur subtitle usi player ke controls se chalao.
+          <p className="text-sm leading-6 text-muted-foreground">
+            Video isi frame mein hai. Play, seek, awaz aur speed usi frame ke controls se chalao.
           </p>
         ) : (
           <>
-            <label className="flex items-center gap-3 text-sm tabular-nums">
-              <span className="w-12">{formatClock(time)}</span>
-              <input
-                type="range"
-                min={0}
-                max={Math.max(duration, 0)}
-                step={1}
-                value={Math.min(time, duration || 0)}
-                aria-label="Video ka time"
-                disabled={!ready}
-                className="h-10 w-full cursor-pointer accent-white"
-                onChange={(event) => {
-                  const next = Number(event.target.value);
-                  playerRef.current?.seekTo(next, true);
-                  setTime(next);
-                  setEnded(false);
-                }}
-              />
-              <span className="w-12 text-right">{formatClock(duration)}</span>
-            </label>
+            <SeekBar time={time} duration={duration} disabled={!ready} onSeek={seekTo} />
 
-            <div className="grid grid-cols-3 gap-2">
-              <button type="button" className="h-14 rounded-lg bg-white/15 text-base font-semibold" onClick={() => seekBy(-10)} disabled={!ready}>
-                −10s
-              </button>
-              <button type="button" className="h-14 rounded-lg bg-white text-lg font-semibold text-black" onClick={togglePlay} disabled={!ready}>
-                {ended ? "Dobara" : playing ? "Roko" : "Chalao"}
-              </button>
-              <button type="button" className="h-14 rounded-lg bg-white/15 text-base font-semibold" onClick={() => seekBy(10)} disabled={!ready}>
-                +10s
-              </button>
+            <div className="grid grid-cols-3 items-start">
+              <RoundAction label="10s peeche" disabled={!ready} onClick={() => seekBy(-10)}>
+                <RotateCcw className="size-5" />
+              </RoundAction>
+              <RoundAction label={ended ? "Dobara" : playing ? "Roko" : "Chalao"} primary disabled={!ready} onClick={togglePlay}>
+                {playing && !ended ? <Pause className="size-7 fill-current" /> : <Play className="size-7 fill-current" />}
+              </RoundAction>
+              <RoundAction label="10s aage" disabled={!ready} onClick={() => seekBy(10)}>
+                <RotateCw className="size-5" />
+              </RoundAction>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Speed</p>
+              <div className="flex rounded-full bg-muted p-1" role="group" aria-label="Speed">
+                {RATES.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    aria-disabled={!ready}
+                    className={`h-10 flex-1 rounded-full text-sm font-semibold ${rate === item ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
+                    onClick={() => {
+                      if (!ready) return;
+                      playerRef.current?.setPlaybackRate(item);
+                      setRate(item);
+                    }}
+                  >
+                    {item}x
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex items-center gap-3">
-              <button type="button" className="h-12 min-w-20 rounded-lg bg-white/15 px-3 text-base font-medium" onClick={toggleMute} disabled={!ready}>
-                {muted ? "Awaz" : "Mute"}
-              </button>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
+              <span className="w-10 text-xs font-medium text-muted-foreground">Awaz</span>
+              <LevelBar
+                label="Awaz"
                 value={muted ? 0 : volume}
-                aria-label="Awaz"
+                max={100}
                 disabled={!ready}
-                className="h-10 w-full cursor-pointer accent-white"
-                onChange={(event) => {
-                  const next = Number(event.target.value);
-                  const player = playerRef.current;
-                  if (!player) return;
-                  player.setVolume(next);
-                  if (next === 0) player.mute();
-                  else player.unMute();
-                  setVolume(next);
-                  setMuted(next === 0);
-                }}
+                onChange={setLevel}
               />
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {RATES.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={`h-12 min-w-14 rounded-lg px-3 text-base font-semibold ${rate === item ? "bg-white text-black" : "bg-white/15"}`}
-                  disabled={!ready}
-                  onClick={() => {
-                    playerRef.current?.setPlaybackRate(item);
-                    setRate(item);
-                  }}
-                >
-                  {item}x
-                </button>
-              ))}
+            <div className="grid grid-cols-4 gap-2">
+              <DeckButton label={muted ? "Awaz" : "Mute"} disabled={!ready} onClick={toggleMute} active={muted}>
+                {muted || volume === 0 ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
+              </DeckButton>
+              <DeckButton label="Subtitle" disabled={!ready} onClick={toggleCaptions} active={captionsOn}>
+                <Captions className="size-5" />
+              </DeckButton>
+              <DeckButton label={zoom ? "Poora" : "Bada"} onClick={() => setZoom((value) => !value)} active={zoom}>
+                {zoom ? <ZoomOut className="size-5" /> : <ZoomIn className="size-5" />}
+              </DeckButton>
+              <DeckButton label={full ? "Chhoti" : "Badi"} onClick={() => void toggleFull()} active={full}>
+                {full ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}
+              </DeckButton>
             </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="h-12 rounded-lg bg-white/15 px-4 text-base font-medium" onClick={() => setZoom((value) => !value)}>
-                {zoom ? "Poora frame" : "Bada dikhao"}
-              </button>
-              <button type="button" className="h-12 rounded-lg bg-white/15 px-4 text-base font-medium" onClick={() => void toggleFull()}>
-                {full ? "Chhoti screen" : "Badi screen"}
-              </button>
-              <button
-                type="button"
-                className={`h-12 rounded-lg px-4 text-base font-medium ${captionsOn ? "bg-white text-black" : "bg-white/15"}`}
-                onClick={toggleCaptions}
-                disabled={!ready}
-              >
-                Subtitle
-              </button>
-            </div>
-            {captionNote ? <p className="text-sm text-white/70">{captionNote}</p> : null}
-            {!ready ? <p className="text-sm text-white/70">Player khul raha hai…</p> : null}
+            {captionNote ? <p className="text-center text-sm text-muted-foreground">{captionNote}</p> : null}
           </>
         )}
       </div>
@@ -443,4 +469,154 @@ export function LectureStage({
   );
 
   return createPortal(stage, document.body);
+}
+
+function SeekBar({
+  time,
+  duration,
+  disabled,
+  onSeek,
+}: {
+  time: number;
+  duration: number;
+  disabled: boolean;
+  onSeek: (next: number) => void;
+}) {
+  const ratio = duration > 0 ? Math.min(1, time / duration) : 0;
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex justify-between text-xs font-medium tabular-nums text-muted-foreground">
+        <span>{formatClock(time)}</span>
+        <span>{formatClock(duration)}</span>
+      </div>
+      <LevelBar label="Video ka time" value={time} max={duration} disabled={disabled} onChange={onSeek} strong ratio={ratio} />
+    </div>
+  );
+}
+
+function LevelBar({
+  label,
+  value,
+  max,
+  disabled,
+  onChange,
+  strong,
+  ratio,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  disabled: boolean;
+  onChange: (next: number) => void;
+  strong?: boolean;
+  ratio?: number;
+}) {
+  const fill = ratio ?? (max > 0 ? Math.min(1, value / max) : 0);
+  function move(clientX: number, el: HTMLElement) {
+    if (disabled || max <= 0) return;
+    const rect = el.getBoundingClientRect();
+    const next = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) * max;
+    onChange(next);
+  }
+  return (
+    <div
+      role="slider"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={Math.round(max)}
+      aria-valuenow={Math.round(value)}
+      aria-disabled={disabled}
+      tabIndex={disabled ? -1 : 0}
+      className="relative flex h-10 w-full touch-none items-center"
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        move(event.clientX, event.currentTarget);
+      }}
+      onPointerMove={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) move(event.clientX, event.currentTarget);
+      }}
+      onKeyDown={(event) => {
+        if (disabled) return;
+        const step = max > 20 ? 5 : 1;
+        if (event.key === "ArrowRight") onChange(Math.min(max, value + step));
+        if (event.key === "ArrowLeft") onChange(Math.max(0, value - step));
+      }}
+    >
+      <span className={`absolute right-0 left-0 rounded-full bg-muted ${strong ? "h-1.5" : "h-1"}`} />
+      <span
+        className={`absolute left-0 rounded-full bg-primary ${strong ? "h-1.5" : "h-1"}`}
+        style={{ width: `${fill * 100}%` }}
+      />
+      <span
+        className="absolute size-4 rounded-full border-2 border-primary bg-card shadow-sm"
+        style={{ left: `clamp(0px, calc(${fill * 100}% - 8px), calc(100% - 16px))` }}
+      />
+    </div>
+  );
+}
+
+function RoundAction({
+  label,
+  primary,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  primary?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-disabled={disabled}
+      onClick={() => {
+        if (!disabled) onClick();
+      }}
+      className="flex flex-col items-center gap-2"
+    >
+      <span
+        className={
+          primary
+            ? "grid size-[4.5rem] place-items-center rounded-full bg-primary text-primary-foreground shadow-sm"
+            : "grid size-12 place-items-center rounded-full bg-secondary text-foreground"
+        }
+      >
+        {children}
+      </span>
+      <span className="text-xs font-medium">{label}</span>
+    </button>
+  );
+}
+
+function DeckButton({
+  label,
+  active,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-disabled={disabled}
+      onClick={() => {
+        if (!disabled) onClick();
+      }}
+      className={`flex h-16 flex-col items-center justify-center gap-1.5 rounded-2xl border text-xs font-medium ${
+        active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"
+      }`}
+    >
+      {children}
+      {label}
+    </button>
+  );
 }
