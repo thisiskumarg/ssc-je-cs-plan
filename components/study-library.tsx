@@ -14,22 +14,44 @@ import {
   type StudySheet,
 } from "@/lib/study-sheets";
 import { sheetPack } from "@/lib/sheet-links";
+import { videosFor, type TopicVideo } from "@/lib/topic-videos";
 
-export function SheetBody({ sheet }: { sheet: StudySheet }) {
+export function SheetBody({
+  sheet,
+  points,
+  onTogglePoint,
+}: {
+  sheet: StudySheet;
+  points?: Record<string, boolean>;
+  onTogglePoint?: (id: string, value: boolean) => void;
+}) {
   return (
     <div className="flex flex-col gap-4">
-      {sheet.blocks.map((block) => (
-        <section key={block.h}>
-          <h4 className="text-sm font-medium">{block.h}</h4>
-          <ul className="mt-1 flex flex-col gap-1.5">
-            {block.lines.map((line) => (
-              <li key={line} className="text-sm leading-6">
-                {line}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      {sheet.blocks.map((block, index) => {
+        const pointId = `${sheet.id}:${index}`;
+        return (
+          <section key={block.h}>
+            <div className="flex items-start gap-2">
+              {onTogglePoint ? (
+                <Checkbox
+                  checked={Boolean(points?.[pointId])}
+                  onCheckedChange={(value) => onTogglePoint(pointId, Boolean(value))}
+                  aria-label={block.h}
+                  className="mt-0.5 size-5"
+                />
+              ) : null}
+              <h4 className="text-sm font-medium">{block.h}</h4>
+            </div>
+            <ul className="mt-1 flex flex-col gap-1.5">
+              {block.lines.map((line) => (
+                <li key={line} className="text-sm leading-6">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -41,6 +63,10 @@ export function DaySheets({
   onToggle,
   pyqDone,
   onTogglePyq,
+  videosDone,
+  onToggleVideo,
+  points,
+  onTogglePoint,
   highlightId,
 }: {
   iso: string;
@@ -49,6 +75,10 @@ export function DaySheets({
   onToggle: (id: string, value: boolean) => void;
   pyqDone: Record<string, boolean>;
   onTogglePyq: (id: string, value: boolean) => void;
+  videosDone: Record<string, boolean>;
+  onToggleVideo: (id: string, value: boolean) => void;
+  points: Record<string, boolean>;
+  onTogglePoint: (id: string, value: boolean) => void;
   highlightId?: string | null;
 }) {
   const rows = sheetsOnDay(iso, saturdayDuty);
@@ -71,6 +101,10 @@ export function DaySheets({
           onToggle={onToggle}
           pyqDone={pyqDone}
           onTogglePyq={onTogglePyq}
+          videosDone={videosDone}
+          onToggleVideo={onToggleVideo}
+          points={points}
+          onTogglePoint={onTogglePoint}
           highlight={highlightId === sheet.id}
         />
       ))}
@@ -85,6 +119,10 @@ export function SheetCard({
   onToggle,
   pyqDone,
   onTogglePyq,
+  videosDone,
+  onToggleVideo,
+  points,
+  onTogglePoint,
   highlight,
 }: {
   sheet: StudySheet;
@@ -93,6 +131,10 @@ export function SheetCard({
   onToggle: (id: string, value: boolean) => void;
   pyqDone: Record<string, boolean>;
   onTogglePyq: (id: string, value: boolean) => void;
+  videosDone: Record<string, boolean>;
+  onToggleVideo: (id: string, value: boolean) => void;
+  points: Record<string, boolean>;
+  onTogglePoint: (id: string, value: boolean) => void;
   highlight?: boolean;
 }) {
   return (
@@ -118,7 +160,12 @@ export function SheetCard({
             <h3 className="mt-1 text-base font-medium">{sheet.title}</h3>
           </div>
         </div>
-        <SheetBody sheet={sheet} />
+        <SheetPlayer
+          sheetId={sheet.id}
+          videosDone={videosDone}
+          onToggleVideo={onToggleVideo}
+        />
+        <SheetBody sheet={sheet} points={points} onTogglePoint={onTogglePoint} />
         <SheetSources
           sheetId={sheet.id}
           pyqDone={pyqDone}
@@ -126,6 +173,107 @@ export function SheetCard({
         />
       </CardContent>
     </Card>
+  );
+}
+
+function SheetPlayer({
+  sheetId,
+  videosDone,
+  onToggleVideo,
+}: {
+  sheetId: string;
+  videosDone: Record<string, boolean>;
+  onToggleVideo: (id: string, value: boolean) => void;
+}) {
+  const videos = videosFor(sheetId);
+  const [active, setActive] = useState(0);
+  const [playing, setPlaying] = useState<string | null>(null);
+  if (videos.length === 0) {
+    return (
+      <p className="rounded-lg bg-muted px-3 py-2 text-sm leading-6">
+        Is ghadi par lecture nahi. Neeche wala paper yahin se kholo aur usi time
+        frame mein solve karo.
+      </p>
+    );
+  }
+  const video = videos[Math.min(active, videos.length - 1)];
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border/70 p-3">
+      <h4 className="text-sm font-medium">Yahin dekho</h4>
+      <p className="text-sm leading-6 text-muted-foreground">
+        Video isi card mein chalegi. {video.why}
+      </p>
+      <div className="flex flex-col gap-2">
+        {videos.map((item, index) => (
+          <VideoRow
+            key={item.yt}
+            item={item}
+            open={playing === item.yt}
+            watched={Boolean(videosDone[item.yt])}
+            onPlay={() => {
+              setActive(index);
+              setPlaying(item.yt);
+            }}
+            onToggle={onToggleVideo}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VideoRow({
+  item,
+  open,
+  watched,
+  onPlay,
+  onToggle,
+}: {
+  item: TopicVideo;
+  open: boolean;
+  watched: boolean;
+  onPlay: () => void;
+  onToggle: (id: string, value: boolean) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-start gap-3">
+        <Checkbox
+          checked={watched}
+          onCheckedChange={(value) => onToggle(item.yt, Boolean(value))}
+          aria-label={`${item.title} dekh li`}
+          className="mt-1 size-5"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">
+            {item.who}
+            {item.minutes > 0 ? ` · ${item.minutes} min` : ""}
+          </p>
+          <p className="text-sm leading-6">{item.title}</p>
+          <p className="text-sm leading-6 text-muted-foreground">Points: {item.covers}</p>
+          <Button
+            type="button"
+            size="sm"
+            variant={open ? "secondary" : "default"}
+            className="mt-2"
+            onClick={onPlay}
+          >
+            {open ? "Yahin chal rahi hai" : "Yahin chalao"}
+          </Button>
+        </div>
+      </div>
+      {open ? (
+        <div className="aspect-video w-full overflow-hidden rounded-lg bg-black">
+          <iframe
+            className="h-full w-full"
+            src={`https://www.youtube-nocookie.com/embed/${item.yt}?rel=0`}
+            title={item.title}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -204,6 +352,10 @@ export function SheetLibrary({
   onToggle,
   pyqDone,
   onTogglePyq,
+  videosDone,
+  onToggleVideo,
+  points,
+  onTogglePoint,
   onOpenDay,
 }: {
   saturdayDuty: boolean;
@@ -212,6 +364,10 @@ export function SheetLibrary({
   onToggle: (id: string, value: boolean) => void;
   pyqDone: Record<string, boolean>;
   onTogglePyq: (id: string, value: boolean) => void;
+  videosDone: Record<string, boolean>;
+  onToggleVideo: (id: string, value: boolean) => void;
+  points: Record<string, boolean>;
+  onTogglePoint: (id: string, value: boolean) => void;
   onOpenDay: (iso: string) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -245,9 +401,9 @@ export function SheetLibrary({
             </span>
           </div>
           <p className="text-sm leading-6 text-muted-foreground">
-            Har sheet us ghadi par khulti hai jab slot start hota hai. Aage ke din
-            ki sheets yahin hain, padh sakte ho. Tick ka matlab hai sheet band karke
-            yaad aa gayi.
+            Har sheet us ghadi par khulti hai jab slot start hota hai. Video isi
+            card mein chalegi, usi se us sheet ke points cover karo. Aage ke din ki
+            sheets yahin hain. Point ka tick matlab woh hissa ho gaya.
           </p>
           <input
             value={query}
@@ -299,6 +455,10 @@ export function SheetLibrary({
                 onToggle={onToggle}
                 pyqDone={pyqDone}
                 onTogglePyq={onTogglePyq}
+                videosDone={videosDone}
+                onToggleVideo={onToggleVideo}
+                points={points}
+                onTogglePoint={onTogglePoint}
               />
             ))}
           </section>

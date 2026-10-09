@@ -19,7 +19,7 @@ The Syllabus tab lists every official Paper-I line (14.2.1 reasoning, 14.2.2 gen
 
 The Formula tab is the one-line card for that same syllabus: Digital Logic through Computer Networks, Engineering Mathematics, and a short reasoning-pattern card. Each day opens only its own lines. A tick means you can say the line with the sheet closed.
 
-The Sheets tab is the reading itself. Every study slot from 8 to 31 October has a sheet that opens at that clock time: the lesson, the worked numerical, the reasoning drill, and the revision prompt. Each sheet lists the pages to open for those points, and the PYQ set to solve in that slot's clock time. Future days are in the same tab. A tick means that sheet was revised, or that PYQ set was solved. Checked slots, syllabus ticks, formula ticks, sheet ticks, and PYQ ticks stay in the browser that opened the page.
+The Sheets tab is the reading itself. Every study slot from 8 to 31 October has a sheet that opens at that clock time: the lesson, the worked numerical, the reasoning drill, and the revision prompt. Each sheet plays the lecture for those points inside the card, lists the pages to open, and gives the PYQ set for that slot's clock time. A point tick means that block is done. A video tick means that lecture was watched. Future days are in the same tab. Checked slots, syllabus ticks, formula ticks, sheet ticks, video ticks, point ticks, and PYQ ticks stay in the browser that opened the page.
 
 The phone timetable is a PDF from **PDF download** on the page, or directly:
 

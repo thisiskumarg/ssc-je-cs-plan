@@ -47,6 +47,7 @@ import { DayFormulas, FormulaBoard } from "@/components/formula-board";
 import { DaySheets, SheetLibrary, slotSheets } from "@/components/study-library";
 import { studySheets, type StudySheet } from "@/lib/study-sheets";
 import { allPyqSets } from "@/lib/sheet-links";
+import { allTopicVideos } from "@/lib/topic-videos";
 
 const STORAGE_KEY = "sscje-cs-plan-v1";
 const publicBase = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -58,6 +59,8 @@ type Persisted = {
   formulas: Record<string, boolean>;
   sheets: Record<string, boolean>;
   pyqs: Record<string, boolean>;
+  videos: Record<string, boolean>;
+  points: Record<string, boolean>;
 };
 
 const emptyProgress: Persisted = {
@@ -67,6 +70,8 @@ const emptyProgress: Persisted = {
   formulas: {},
   sheets: {},
   pyqs: {},
+  videos: {},
+  points: {},
 };
 let progress = emptyProgress;
 const progressListeners = new Set<() => void>();
@@ -86,6 +91,8 @@ function ensureProgress() {
       formulas: parsed.formulas ?? {},
       sheets: parsed.sheets ?? {},
       pyqs: parsed.pyqs ?? {},
+      videos: parsed.videos ?? {},
+      points: parsed.points ?? {},
     };
   } catch {
     progress = emptyProgress;
@@ -222,12 +229,16 @@ export function Planner() {
   const formulasDone = saved.formulas;
   const sheetsRead = saved.sheets;
   const pyqDone = saved.pyqs;
+  const videosDone = saved.videos;
+  const pointsDone = saved.points;
   const syllabusDone = officialTopics.filter((item) => topicsDone[item.id]).length;
   const formulaList = allFormulas();
   const formulaDone = formulaList.filter((item) => formulasDone[item.id]).length;
   const sheetDone = studySheets.filter((item) => sheetsRead[item.id]).length;
   const pyqList = allPyqSets();
   const pyqSolved = pyqList.filter((item) => pyqDone[item.id]).length;
+  const videoList = allTopicVideos();
+  const videoSeen = videoList.filter((item) => videosDone[item.yt]).length;
   const [picked, setPicked] = useState<string | null>(null);
   const [tab, setTab] = useState("today");
   const [lockNote, setLockNote] = useState<string | null>(null);
@@ -280,6 +291,22 @@ export function Planner() {
     writeProgress({
       ...current,
       pyqs: { ...current.pyqs, [id]: value },
+    });
+  }
+
+  function setVideo(id: string, value: boolean) {
+    const current = progressSnapshot();
+    writeProgress({
+      ...current,
+      videos: { ...current.videos, [id]: value },
+    });
+  }
+
+  function setPoint(id: string, value: boolean) {
+    const current = progressSnapshot();
+    writeProgress({
+      ...current,
+      points: { ...current.points, [id]: value },
     });
   }
 
@@ -465,7 +492,7 @@ export function Planner() {
           </div>
           <Progress value={slotPct} className="no-print">
             <ProgressLabel>
-              Slots {slotPct}% · PYQ {pyqSolved}/{pyqList.length} · sheets {sheetDone}/{studySheets.length} · syllabus {syllabusDone}/{officialTopics.length} · formula {formulaDone}/{formulaList.length}
+              Slots {slotPct}% · video {videoSeen}/{videoList.length} · PYQ {pyqSolved}/{pyqList.length} · sheets {sheetDone}/{studySheets.length} · syllabus {syllabusDone}/{officialTopics.length} · formula {formulaDone}/{formulaList.length}
             </ProgressLabel>
             <ProgressValue />
           </Progress>
@@ -603,6 +630,10 @@ export function Planner() {
               onToggle={setSheet}
               pyqDone={pyqDone}
               onTogglePyq={setPyq}
+              videosDone={videosDone}
+              onToggleVideo={setVideo}
+              points={pointsDone}
+              onTogglePoint={setPoint}
               highlightId={
                 selected === todayIso && focus
                   ? slotSheets(selectedDay.iso, focus.start, saturdayDuty)[0]?.id
@@ -656,6 +687,8 @@ export function Planner() {
                       formulas: {},
                       sheets: {},
                       pyqs: {},
+                      videos: {},
+                      points: {},
                     });
                   }
                 }}
@@ -859,6 +892,10 @@ export function Planner() {
               onToggle={setSheet}
               pyqDone={pyqDone}
               onTogglePyq={setPyq}
+              videosDone={videosDone}
+              onToggleVideo={setVideo}
+              points={pointsDone}
+              onTogglePoint={setPoint}
               onOpenDay={openDay}
             />
           </TabsContent>
