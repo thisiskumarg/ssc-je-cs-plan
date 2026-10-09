@@ -7,6 +7,7 @@ import {
   studyMinutes,
   tally,
 } from "@/lib/plan";
+import { paperLabel, topicsOnDay } from "@/lib/official-syllabus";
 
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
@@ -290,6 +291,28 @@ function drawDay(
       y -= 12;
     }
     y -= 6;
+  }
+
+  const lines = topicsOnDay(iso);
+  if (lines.length > 0) {
+    if (y < 80) {
+      page = doc.addPage([PAGE_W, PAGE_H]);
+      y = header(page, bold, font, day.dateLabel, romanDay[day.weekday] ?? "", `${day.title} (contd)`, studyMinutes(slots), questions);
+    }
+    page.drawText("Official syllabus lines", { x: MARGIN, y, size: 11, font: bold, color: NAVY });
+    y -= 14;
+    for (const item of lines) {
+      const row = pdfSafe(`${paperLabel(item.paper)} ${item.code} ${item.section}: ${item.text}`);
+      for (const line of wrap(row, font, 9, PAGE_W - MARGIN * 2)) {
+        if (y < 64) {
+          page = doc.addPage([PAGE_W, PAGE_H]);
+          y = header(page, bold, font, day.dateLabel, romanDay[day.weekday] ?? "", `${day.title} (contd)`, studyMinutes(slots), questions);
+        }
+        page.drawText(line, { x: MARGIN, y, size: 9, font, color: INK });
+        y -= 12;
+      }
+    }
+    y -= 8;
   }
 
   for (const slot of slots) {

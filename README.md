@@ -13,7 +13,9 @@ npm run dev -- --hostname 0.0.0.0 --port 43123
 
 Open [http://127.0.0.1:43123](http://127.0.0.1:43123).
 
-The same planner is published with GitHub Pages from `main`: [https://thisiskumarg.github.io/ssc-je-cs-plan/](https://thisiskumarg.github.io/ssc-je-cs-plan/). Checked slots still stay in the browser that opened the page.
+The same planner is published with GitHub Pages from `main`: [https://thisiskumarg.github.io/ssc-je-cs-plan/](https://thisiskumarg.github.io/ssc-je-cs-plan/). Source: [github.com/thisiskumarg/ssc-je-cs-plan](https://github.com/thisiskumarg/ssc-je-cs-plan).
+
+The Syllabus tab lists every official Paper-I line (14.2.1 reasoning, 14.2.2 general awareness) and every Paper-II Part-D line (14.3.4). Each line is pinned to a day from 8 to 31 October. Tick it when that study is done. Checked slots and syllabus ticks stay in the browser that opened the page.
 
 The phone timetable is a PDF from **PDF download** on the page, or directly:
 

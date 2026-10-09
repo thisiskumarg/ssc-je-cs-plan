@@ -36,10 +36,11 @@ import {
   rules,
   slotsFor,
   studyMinutes,
-  syllabus,
   tally,
   weeks,
 } from "@/lib/plan";
+import { officialTopics, paperLabel, topicsOnDay } from "@/lib/official-syllabus";
+import { SyllabusBoard } from "@/components/syllabus-board";
 
 const STORAGE_KEY = "sscje-cs-plan-v1";
 const publicBase = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -47,9 +48,10 @@ const publicBase = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 type Persisted = {
   checks: Record<string, boolean>;
   saturdayDuty: boolean;
+  topics: Record<string, boolean>;
 };
 
-const emptyProgress: Persisted = { checks: {}, saturdayDuty: false };
+const emptyProgress: Persisted = { checks: {}, saturdayDuty: false, topics: {} };
 let progress = emptyProgress;
 const progressListeners = new Set<() => void>();
 let progressLoaded = false;
@@ -64,6 +66,7 @@ function ensureProgress() {
     progress = {
       checks: parsed.checks ?? {},
       saturdayDuty: Boolean(parsed.saturdayDuty),
+      topics: parsed.topics ?? {},
     };
   } catch {
     progress = emptyProgress;
@@ -194,6 +197,8 @@ export function Planner() {
   const now = useSyncExternalStore(subscribeClock, clockSnapshot, () => null);
   const checks = saved.checks;
   const saturdayDuty = saved.saturdayDuty;
+  const topicsDone = saved.topics;
+  const syllabusDone = officialTopics.filter((item) => topicsDone[item.id]).length;
   const [picked, setPicked] = useState<string | null>(null);
   const [tab, setTab] = useState("today");
   const [lockNote, setLockNote] = useState<string | null>(null);
@@ -215,6 +220,14 @@ export function Planner() {
 
   function setSaturdayDuty(value: boolean) {
     writeProgress({ ...progressSnapshot(), saturdayDuty: value });
+  }
+
+  function setTopic(id: string, value: boolean) {
+    const current = progressSnapshot();
+    writeProgress({
+      ...current,
+      topics: { ...current.topics, [id]: value },
+    });
   }
 
   const visibleDays = useMemo(
@@ -398,7 +411,9 @@ export function Planner() {
             />
           </div>
           <Progress value={slotPct} className="no-print">
-            <ProgressLabel>Progress isi phone par save hota hai</ProgressLabel>
+            <ProgressLabel>
+              Slots {slotPct}% · syllabus {syllabusDone}/{officialTopics.length}
+            </ProgressLabel>
             <ProgressValue />
           </Progress>
         </div>
@@ -509,6 +524,12 @@ export function Planner() {
               </p>
             ) : null}
 
+            <DaySyllabus
+              iso={selectedDay.iso}
+              done={topicsDone}
+              onToggle={setTopic}
+            />
+
             <ol className="flex flex-col gap-3">
               {selectedSlots.map((slot) => (
                 <TimelineRow
@@ -541,7 +562,7 @@ export function Planner() {
                 variant="ghost"
                 onClick={() => {
                   if (window.confirm("Is device ka progress mita dun?")) {
-                    writeProgress({ checks: {}, saturdayDuty });
+                    writeProgress({ checks: {}, saturdayDuty, topics: {} });
                   }
                 }}
               >
@@ -712,42 +733,11 @@ export function Planner() {
                 </CardContent>
               </Card>
             </div>
-            <p className="text-sm leading-6 text-muted-foreground">
-              2026 ki notification mein yeh Part-D hai: Computer Science and
-              Information Technology. Scientific Assistant (IMD) ke CS stream ka
-              paper hai, aur wahi technical syllabus Paper-I aur Paper-II dono
-              mein hai. Sawal graduation level ke hain, sirf diploma notes se
-              kaatna mushkil hai.
-            </p>
-            <div className="grid gap-3">
-              {syllabus.map((subject) => {
-                const pct = coverage(subject.days, saturdayDuty, checks);
-                return (
-                  <Card key={subject.id}>
-                    <CardContent className="flex flex-col gap-3">
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <h2 className="font-heading text-lg font-semibold">
-                          {subject.name}
-                        </h2>
-                        <span className="text-xs text-muted-foreground">
-                          {subject.weight} · {pct}%
-                        </span>
-                      </div>
-                      <ul className="grid gap-1 text-sm leading-6 sm:grid-cols-2">
-                        {subject.points.map((point) => (
-                          <li key={point}>{point}</li>
-                        ))}
-                      </ul>
-                      <p className="text-xs text-muted-foreground">
-                        {subject.days
-                          .map((iso) => dayByIso(iso).dateLabel)
-                          .join(", ")}
-                      </p>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+            <SyllabusBoard
+              done={topicsDone}
+              onToggle={setTopic}
+              onOpenDay={openDay}
+            />
             <div className="grid gap-3">
               {rules.map((rule) => (
                 <Card key={rule.title}>
@@ -786,17 +776,48 @@ export function Planner() {
   );
 }
 
-function coverage(
-  isos: string[],
-  saturdayDuty: boolean,
-  checks: Record<string, boolean>,
-) {
-  const required = isos.flatMap((iso) =>
-    requiredSlots(slotsFor(dayByIso(iso), saturdayDuty)),
+function DaySyllabus({
+  iso,
+  done,
+  onToggle,
+}: {
+  iso: string;
+  done: Record<string, boolean>;
+  onToggle: (id: string, value: boolean) => void;
+}) {
+  const items = topicsOnDay(iso);
+  if (items.length === 0) return null;
+  const finished = items.filter((item) => done[item.id]).length;
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="font-heading text-lg font-semibold">Is din ki syllabus lines</h3>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {finished}/{items.length}
+          </span>
+        </div>
+        <ul className="flex flex-col">
+          {items.map((item) => (
+            <li key={item.id} className="flex items-start gap-3 py-1.5">
+              <Checkbox
+                checked={Boolean(done[item.id])}
+                onCheckedChange={(value) => onToggle(item.id, Boolean(value))}
+                aria-label={item.text}
+                className="mt-0.5 size-5"
+              />
+              <div>
+                <p className="text-sm leading-6">{item.text}</p>
+                <p className="text-xs text-muted-foreground">
+                  {paperLabel(item.paper)} · {item.code} · {item.section}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   );
-  if (required.length === 0) return 0;
-  const done = required.filter((slot) => checks[slot.id]).length;
-  return Math.round((done / required.length) * 100);
 }
 
 function Stat({
